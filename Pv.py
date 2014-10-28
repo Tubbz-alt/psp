@@ -11,9 +11,11 @@ class Pv(pyca.capv):
     self.simulated = simulated
     if simulated != None:
       self.data = {}
-      self.data["secs"] = 0
-      self.data["nsec"] = 0
-      self.data["value"] = 0
+      self.data["status"] = 0L
+      self.data["secs"] = 0L
+      self.data["nsec"] = 0L
+      self.data["value"] = 0L
+      self.data["severity"] = 0L
     self.ismonitored = False
 
   # Channel access callbacks
@@ -39,9 +41,11 @@ class Pv(pyca.capv):
 
   def monitor(self, mask, ctrl=False, count=None):
     self.subscribe_channel(mask, ctrl, count)
+    self.ismonitored = True
 
   def unsubscribe(self):
     self.unsubscribe_channel()
+    self.ismonitored = False
 
   def get(self, ctrl=False, timeout=-1.0, count=None):
     tmo = float(timeout)
@@ -55,7 +59,8 @@ class Pv(pyca.capv):
   def getcopy(self):
     interval = sys.getcheckinterval()
     try:
-      sys.setcheckinterval(2**31-1)
+      #sys.setcheckinterval(sys.maxint)
+      sys.setcheckinterval(100)
       datacopy = copy.deepcopy(self.data)
     finally:
       sys.setcheckinterval(interval)
@@ -67,3 +72,7 @@ class Pv(pyca.capv):
       return self.data[name]
     else:
       raise AttributeError
+
+  def setvalue(self, value):
+    self.data["value"] = value
+    
