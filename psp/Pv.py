@@ -54,6 +54,16 @@ class Pv(pyca.capv):
   def put(self, value, timeout=-1.0):
     tmo = float(timeout)
     self.put_data(value, tmo)
+
+  def get_enum_set(self, timeout=-1.0):
+    """
+    Only valid for ENUM type PVs and Fields, will throw exception otherwise
+    Retrieves the array of valid ENUM String values for this PV
+    Array index is ENUM Integer value
+    Array is stored in the 'data' member, or is available directly as Pv.enum_set
+    """
+    tmo = float(timeout)
+    self.get_enum_strings(tmo)
     
   # Used to obtain a copy of the data which won't be overwritten by ca callbacks
   def getcopy(self):
