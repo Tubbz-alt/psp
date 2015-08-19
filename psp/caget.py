@@ -17,7 +17,7 @@ def caget(pvname):
   
 
 if __name__ == '__main__':
-  options = Options(['pvnames'], ['connect_timeout','get_timeout'], ['ctrl'])
+  options = Options(['pvnames'], ['connect_timeout','get_timeout'], ['ctrl', 'hex'])
   try:
     options.parse()
   except Exception, msg:
@@ -46,7 +46,10 @@ if __name__ == '__main__':
         if pv.status == pyca.NO_ALARM:
           ts = time.localtime(pv.secs+pyca.epoch)
           tstr = time.strftime("%Y-%m-%d %H:%M:%S", ts)
-          print "%-30s %s.%09d" %(pv.name, tstr, pv.nsec), pv.value
+          if options.hex is not None:
+            print "%-30s %08x.%08x" %(pv.name, pv.secs, pv.nsec), pv.value
+          else:
+            print "%-30s %s.%09d" %(pv.name, tstr, pv.nsec), pv.value
         else:
           print "%-30s %s %s" %(pv.name, 
                                 pyca.severity[pv.severity],
