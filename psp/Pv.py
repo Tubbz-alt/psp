@@ -40,7 +40,7 @@ class Pv(pyca.capv):
     self.monitor_append = False
     self.con_cbs = {}
     self.mon_cbs = {}
-    self.cbid = 1;
+    self.cbid = 1
     self.timestamps = []
     self.values = []
     try:
@@ -55,7 +55,7 @@ class Pv(pyca.capv):
       m = kw['monitor']
       if m == True:
         self.do_monitor = True
-      elif m == True:
+      elif m == False:
         self.do_monitor = False
       else:
         self.do_monitor = True
