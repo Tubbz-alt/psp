@@ -273,8 +273,12 @@ class Pv(pyca.capv):
     """ start monitoring for the Pv, new values are added to the `values` 
         list if monitor_append is True """
     if not self.isinitialized:
-      self.do_initialize = True
-      self.connect()
+      if self.isconnected:
+        self.get_data(self.control, -1.0, self.count)
+        pyca.flush_io()
+      else:
+        self.do_initialize = True
+        self.connect()
       self.wait_ready()
     if self.ismonitored:
       if monitor_append == self.monitor_append:
@@ -322,7 +326,6 @@ class Pv(pyca.capv):
     if self.data.has_key(name):
       return self.data[name]
     else:
-      print name
       raise AttributeError
 
 # Stand alone routines!
