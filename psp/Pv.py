@@ -198,8 +198,12 @@ class Pv(pyca.capv):
     if DEBUG != 0:
       logprint("caput %s in %s\n" % (value, self.name))
     if not self.isinitialized:
-      self.do_initialize = True
-      self.connect()
+      if self.isconnected:
+        self.get_data(self.control, -1.0, self.count)
+        pyca.flush_io()
+      else:
+        self.do_initialize = True
+        self.connect()
       if not self.wait_ready(DEFAULT_TIMEOUT * 2):
         raise pyca.pyexc, "put: connection timed out for PV %s" % self.name
     if timeout != None:
