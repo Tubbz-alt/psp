@@ -38,6 +38,11 @@ class Pv(pyca.capv):
     self.isconnected   = False
     self.isinitialized = False
     self.monitor_append = False
+    self.con_cbs = {}
+    self.mon_cbs = {}
+    self.cbid = 1;
+    self.timestamps = []
+    self.values = []
     try:
       self.count = kw['count']
     except:
@@ -61,11 +66,6 @@ class Pv(pyca.capv):
       self.do_initialize = kw['initialize']
     except:
       self.do_initialize = False
-    self.con_cbs = {}
-    self.mon_cbs = {}
-    self.cbid = 1;
-    self.timestamps = []
-    self.values = []
     if self.do_initialize:
       self.connect(None)
 
@@ -326,6 +326,7 @@ class Pv(pyca.capv):
     if self.data.has_key(name):
       return self.data[name]
     else:
+      print "%s (%s) has No attribute %s" % (str(self), self.name, name)
       raise AttributeError
 
 # Stand alone routines!
