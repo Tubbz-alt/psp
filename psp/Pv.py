@@ -252,7 +252,7 @@ class Pv(pyca.capv):
       logprint("waiting for pv %s to change timed out" % self.name)
     return result
     
-  def wait_until_value(self, value, timeout=60):
+  def wait_for_value(self, value, timeout=60):
     result = self.wait_condition(lambda: self.value == value, timeout)
     if not result:
       logprint("waiting for pv %s to become %s timed out" % (self.name, value))
@@ -381,7 +381,7 @@ def wait_until_change(pvname,timeout=60):
   if not ismon:
     monitor_stop(pvname)
 
-def monitor_until_value(pvname,value,timeout=60):
+def wait_for_value(pvname,value,timeout=60):
   """ wait until pvname is exactly value (default timeout is 60 sec) """
   pv = add_pv_to_cache(pvname)
   ismon = pv.ismonitored
