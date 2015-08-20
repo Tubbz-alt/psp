@@ -204,8 +204,7 @@ class Pv(pyca.capv):
       else:
         self.do_initialize = True
         self.connect()
-      if not self.wait_ready(DEFAULT_TIMEOUT * 2):
-        raise pyca.pyexc, "put: connection timed out for PV %s" % self.name
+      self.wait_ready(DEFAULT_TIMEOUT * 2):
     if timeout != None:
       tmo = float(timeout)
     else:
