@@ -80,7 +80,7 @@ class Pv(pyca.capv):
     else:
       self.__con_sem.clear()
     for (id, cb) in self.con_cbs.items():
-      cb(id, isconnected)
+      cb(isconnected)
 
   def __getevt_handler(self, e=None):
     if e == None:
@@ -100,7 +100,7 @@ class Pv(pyca.capv):
       self.values.append(self.value)
       self.timestamps.append(self.timestamp())
     for (id, (cb, once)) in self.mon_cbs.items():
-      cb(id, e)
+      cb(e)
       if once and e == None:
         self.del_monitor_callback(id)
     if e == None:
@@ -240,7 +240,7 @@ class Pv(pyca.capv):
       self.monitor()
       pyca.flush_io()
     sem = threading.Event()
-    id = self.add_monitor_callback(lambda id, e: self.__wc_mon_cb(e, condition, sem),
+    id = self.add_monitor_callback(lambda e: self.__wc_mon_cb(e, condition, sem),
                                    False)
     sem.wait(timeout)
     self.del_monitor_callback(id)
