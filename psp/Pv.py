@@ -257,6 +257,12 @@ class Pv(pyca.capv):
     if not result:
       logprint("waiting for pv %s to become %s timed out" % (self.name, value))
     return result
+    
+  def wait_for_range(self, low, high, timeout=60):
+    result = self.wait_condition(lambda: (low <= self.value) and (self.value <= high), timeout)
+    if not result:
+      logprint("waiting for pv %s to become %s timed out" % (self.name, value))
+    return result
 
   def timestamp(self):
     return (self.secs + pyca.epoch, self.nsec)
@@ -392,6 +398,16 @@ def wait_for_value(pvname,value,timeout=60):
   if not ismon:
     pv.monitor_start(False)
   pv.wait_until_value(value,timeout=timeout)
+  if not ismon:
+    monitor_stop(pvname)
+
+def wait_for_range(pvname,low,high,timeout=60):
+  """ wait until pvname is exactly between low and high (default timeout is 60 sec) """
+  pv = add_pv_to_cache(pvname)
+  ismon = pv.ismonitored
+  if not ismon:
+    pv.monitor_start(False)
+  pv.wait_until_range(low, high, timeout=timeout)
   if not ismon:
     monitor_stop(pvname)
 
