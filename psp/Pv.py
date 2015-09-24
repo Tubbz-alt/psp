@@ -108,7 +108,7 @@ class Pv(pyca.capv):
         logprint("%s monitoring %s %s" % (now(), self.name, self.timestr()))
         logprint(self.value)
     else:
-      logprint("%-30s %s" % (self.name, exception))
+      logprint("%-30s %s" % (self.name, e))
 
   def add_connection_callback(self, cb):
     id = self.cbid
@@ -194,7 +194,7 @@ class Pv(pyca.capv):
       pass
     return self.value
 
-  def put(self, value, timeout=None):
+  def put(self, value, **kw):
     if DEBUG != 0:
       logprint("caput %s in %s\n" % (value, self.name))
     if not self.isinitialized:
@@ -205,10 +205,14 @@ class Pv(pyca.capv):
         self.do_initialize = True
         self.connect()
       self.wait_ready(DEFAULT_TIMEOUT * 2)
-    if timeout != None:
-      tmo = float(timeout)
-    else:
-      tmo = -1.0
+    try:
+      timeout = kw['timeout']
+      if timeout != None:
+        tmo = float(timeout)
+      else:
+        tmo = -1.0
+    except:
+      tmo = DEFAULT_TIMEOUT
     self.put_data(value, tmo)
     return value
 
