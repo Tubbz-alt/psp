@@ -257,12 +257,16 @@ class Pv(pyca.capv):
     return result
     
   def wait_for_value(self, value, timeout=60):
+    if self.ismonitored and self.value == value:
+      return True
     result = self.wait_condition(lambda: self.value == value, timeout)
     if not result:
       logprint("waiting for pv %s to become %s timed out" % (self.name, value))
     return result
     
   def wait_for_range(self, low, high, timeout=60):
+    if self.ismonitored and (low <= self.value) and (self.value <= high):
+      return True
     result = self.wait_condition(lambda: (low <= self.value) and (self.value <= high), timeout)
     if not result:
       logprint("waiting for pv %s to become %s timed out" % (self.name, value))
