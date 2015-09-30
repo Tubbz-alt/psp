@@ -405,7 +405,7 @@ def wait_for_value(pvname,value,timeout=60):
   ismon = pv.ismonitored
   if not ismon:
     pv.monitor_start(False)
-  pv.wait_until_value(value,timeout=timeout)
+  pv.wait_for_value(value,timeout=timeout)
   if not ismon:
     monitor_stop(pvname)
 
@@ -415,7 +415,7 @@ def wait_for_range(pvname,low,high,timeout=60):
   ismon = pv.ismonitored
   if not ismon:
     pv.monitor_start(False)
-  pv.wait_until_range(low, high, timeout=timeout)
+  pv.wait_for_range(low, high, timeout=timeout)
   if not ismon:
     monitor_stop(pvname)
 
