@@ -340,8 +340,7 @@ class Pv(pyca.capv):
     if self.data.has_key(name):
       return self.data[name]
     else:
-      print "%s (%s) has No attribute %s" % (str(self), self.name, name)
-      raise AttributeError
+      return self.__dict__[name]
 
 # Stand alone routines!
 
