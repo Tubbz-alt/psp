@@ -31,6 +31,7 @@ class Pv(pyca.capv):
     pyca.capv.__init__(self, name)
     self.__con_sem = threading.Event()
     self.__init_sem = threading.Event()
+    self.__pyca_sem = threading.Semaphore()
     self.connect_cb  = self.__connection_handler
     self.monitor_cb  = self.__monitor_handler
     self.getevt_cb   = self.__getevt_handler
@@ -131,19 +132,30 @@ class Pv(pyca.capv):
   # Calls to channel access methods
   # Note that these don't call pyca.flush_io()!
   def connect(self, timeout=None):
-    self.create_channel()
+    pyca.attach_context()
+    try:
+      self.create_channel()
+    except pyca.pyexc:
+      pass
     if timeout != None:
       tmo = float(timeout)
       if tmo > 0:
         self.__con_sem.wait(tmo)
         if not self.__con_sem.isSet():
+          self.disconnect()
           raise pyca.pyexc, "connection timedout for PV %s" % self.name
 
   def disconnect(self):
-    self.clear_channel()
+    pyca.attach_context()
+    try:
+      self.clear_channel()
+    except pyca.pyexc:
+      pass
+    self.isconnected = False
 
   def monitor(self, mask=pyca.DBE_VALUE | pyca.DBE_LOG | pyca.DBE_ALARM,
               ctrl=None, count=None):
+    pyca.attach_context()
     if not self.isconnected:
       self.connect(DEFAULT_TIMEOUT)
       if not self.isconnected:
@@ -156,10 +168,12 @@ class Pv(pyca.capv):
     self.ismonitored = True
 
   def unsubscribe(self):
+    pyca.attach_context()
     self.unsubscribe_channel()
     self.ismonitored = False
 
   def get(self, **kw):
+    pyca.attach_context()
     if DEBUG != 0:
       logprint("caget %s: " % self.name)
     if not self.isconnected:
@@ -184,7 +198,8 @@ class Pv(pyca.capv):
         tmo = -1.0
     except:
       tmo = DEFAULT_TIMEOUT
-    self.get_data(ctrl, tmo, count)
+    with self.__pyca_sem:
+      self.get_data(ctrl, tmo, count)
     if tmo > 0 and DEBUG != 0:
       logprint("got %s\n" % self.value.__str__())
     try:
@@ -195,6 +210,7 @@ class Pv(pyca.capv):
     return self.value
 
   def put(self, value, **kw):
+    pyca.attach_context()
     if DEBUG != 0:
       logprint("caput %s in %s\n" % (value, self.name))
     if not self.isinitialized:
@@ -213,7 +229,8 @@ class Pv(pyca.capv):
         tmo = -1.0
     except:
       tmo = DEFAULT_TIMEOUT
-    self.put_data(value, tmo)
+    with self.__pyca_sem:
+      self.put_data(value, tmo)
     return value
 
   def get_enum_set(self, timeout=-1.0):
@@ -223,11 +240,13 @@ class Pv(pyca.capv):
     Array index is ENUM Integer value
     Array is stored in the 'data' member, or is available directly as Pv.enum_set
     """
+    pyca.attach_context()
     tmo = float(timeout)
     self.get_enum_strings(tmo)
 
   # "Higher level" methods.
   def wait_ready(self, timeout=None):
+    pyca.attach_context()
     pyca.flush_io()
     self.__init_sem.wait(timeout)
     if not self.__init_sem.isSet():
@@ -240,6 +259,7 @@ class Pv(pyca.capv):
       
   # Returns True if successfully waited, False if timeout.
   def wait_condition(self, condition, timeout=60):
+    pyca.attach_context()
     if not self.ismonitored:
       self.monitor()
       pyca.flush_io()
@@ -286,6 +306,7 @@ class Pv(pyca.capv):
   def monitor_start(self, monitor_append=False):
     """ start monitoring for the Pv, new values are added to the `values` 
         list if monitor_append is True """
+    pyca.attach_context()
     if not self.isinitialized:
       if self.isconnected:
         self.get_data(self.control, -1.0, self.count)
@@ -309,6 +330,7 @@ class Pv(pyca.capv):
   def monitor_stop(self):
     """ stop  monitoring for the Pv, note that this does not clear the 
         `values` list """
+    pyca.attach_context()
     if self.ismonitored:
       self.unsubscribe()
 
