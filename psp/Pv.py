@@ -17,6 +17,7 @@ def __printfn(s):
 logprint        = __printfn
 DEBUG           = 0
 pv_cache        = {}
+pyca_sems       = {}
 DEFAULT_TIMEOUT = 1.0
 
 def now():
@@ -31,7 +32,10 @@ class Pv(pyca.capv):
     pyca.capv.__init__(self, name)
     self.__con_sem = threading.Event()
     self.__init_sem = threading.Event()
-    self.__pyca_sem = threading.Semaphore()
+    if name in pyca_sems:
+      self.__pyca_sem = pyca_sems[name]
+    else:
+      self.__pyca_sem = pyca_sems[name] = threading.Lock()
     self.connect_cb  = self.__connection_handler
     self.monitor_cb  = self.__monitor_handler
     self.getevt_cb   = self.__getevt_handler
@@ -198,7 +202,7 @@ class Pv(pyca.capv):
         tmo = -1.0
     except:
       tmo = DEFAULT_TIMEOUT
-    with self.__pyca_sem:
+    with TimeoutSem(self.__pyca_sem, tmo):
       self.get_data(ctrl, tmo, count)
     if tmo > 0 and DEBUG != 0:
       logprint("got %s\n" % self.value.__str__())
@@ -229,7 +233,7 @@ class Pv(pyca.capv):
         tmo = -1.0
     except:
       tmo = DEFAULT_TIMEOUT
-    with self.__pyca_sem:
+    with TimeoutSem(self.__pyca_sem, tmo):
       self.put_data(value, tmo)
     return value
 
@@ -258,39 +262,46 @@ class Pv(pyca.capv):
       sem.set()
       
   # Returns True if successfully waited, False if timeout.
-  def wait_condition(self, condition, timeout=60):
-    pyca.attach_context()
-    if not self.ismonitored:
-      self.monitor()
-      pyca.flush_io()
+  def wait_condition(self, condition, timeout=60, check_first=True):
+    self._ensure_monitored()
     sem = threading.Event()
     id = self.add_monitor_callback(lambda e: self.__wc_mon_cb(e, condition, sem),
                                    False)
+    if check_first and condition():
+      self.del_monitor_callback(id)
+      return True
     sem.wait(timeout)
     self.del_monitor_callback(id)
     return sem.is_set()
     
   def wait_until_change(self, timeout=60):
-    result = self.wait_condition(lambda: True, timeout)
+    self._ensure_monitored()
+    value = self.value
+    result = self.wait_condition(lambda: self.value != value, timeout, True)
     if not result:
       logprint("waiting for pv %s to change timed out" % self.name)
     return result
     
   def wait_for_value(self, value, timeout=60):
-    if self.ismonitored and self.value == value:
-      return True
-    result = self.wait_condition(lambda: self.value == value, timeout)
+    self._ensure_monitored()
+    result = self.wait_condition(lambda: self.value == value, timeout, True)
     if not result:
       logprint("waiting for pv %s to become %s timed out" % (self.name, value))
     return result
     
   def wait_for_range(self, low, high, timeout=60):
-    if self.ismonitored and (low <= self.value) and (self.value <= high):
-      return True
-    result = self.wait_condition(lambda: (low <= self.value) and (self.value <= high), timeout)
+    self._ensure_monitored()
+    result = self.wait_condition(lambda: (low <= self.value) and (self.value <= high), timeout, True)
     if not result:
       logprint("waiting for pv %s to become %s timed out" % (self.name, value))
     return result
+
+  def _ensure_monitored(self):
+    pyca.attach_context()
+    self.get()
+    if not self.ismonitored:
+      self.monitor()
+      pyca.flush_io()
 
   def timestamp(self):
     return (self.secs + pyca.epoch, self.nsec)
@@ -364,6 +375,49 @@ class Pv(pyca.capv):
     else:
       return self.__dict__[name]
 
+
+class TimeoutSem(object):
+  """
+  Context manager/wrapper for semaphores, with a timeout on the acquire call.
+  Timeout < 0 blocks indefinitely.
+
+  Usage:
+  with TimeoutSem(<Semaphore or Lock>, <timeout>):
+    <code block>
+  """
+  def __init__(self, sem, timeout=-1):
+    self.sem = sem
+    self.timeout = timeout
+
+  def __enter__(self):
+    self.acq = False
+    if self.timeout < 0:
+      self.acq = self.sem.acquire(True)
+    elif self.timeout == 0:
+      self.acq = self.sem.acquire(False)
+    else:
+      self.tmo = threading.Timer(self.timeout, self.raise_tmo)
+      self.tmo.start()
+      self.acq = self.sem.acquire(True)
+      self.tmo.cancel()
+    if not self.acq:
+      self.raise_tmo()
+
+  def __exit__(self, type, value, traceback):
+    try:
+      if self.acq:
+        self.sem.release()
+    except threading.ThreadError:
+      pass
+    try:
+      self.tmo.cancel()
+    except AttributeError:
+      pass
+
+  def raise_tmo(self):
+    raise threading.ThreadError("semaphore acquire timed out")
+
+
 # Stand alone routines!
 
 def add_pv_to_cache(pvname):
@@ -416,9 +470,10 @@ def wait_until_change(pvname,timeout=60):
   ismon = pv.ismonitored
   if not ismon:
     pv.monitor_start(False)
-  pv.wait_until_change(timeout=timeout)
+  changed = pv.wait_until_change(timeout=timeout)
   if not ismon:
     monitor_stop(pvname)
+  return changed
 
 def wait_for_value(pvname,value,timeout=60):
   """ wait until pvname is exactly value (default timeout is 60 sec) """
@@ -426,9 +481,10 @@ def wait_for_value(pvname,value,timeout=60):
   ismon = pv.ismonitored
   if not ismon:
     pv.monitor_start(False)
-  pv.wait_for_value(value,timeout=timeout)
+  is_value = pv.wait_for_value(value,timeout=timeout)
   if not ismon:
     monitor_stop(pvname)
+  return is_value
 
 def wait_for_range(pvname,low,high,timeout=60):
   """ wait until pvname is exactly between low and high (default timeout is 60 sec) """
@@ -436,9 +492,10 @@ def wait_for_range(pvname,low,high,timeout=60):
   ismon = pv.ismonitored
   if not ismon:
     pv.monitor_start(False)
-  pv.wait_for_range(low, high, timeout=timeout)
+  in_range = pv.wait_for_range(low, high, timeout=timeout)
   if not ismon:
     monitor_stop(pvname)
+  return in_range
 
 def clear():
   """ stop monitoring and disconnect PV, to use as kind of reset """
