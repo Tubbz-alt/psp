@@ -293,7 +293,7 @@ class Pv(pyca.capv):
     self._ensure_monitored()
     result = self.wait_condition(lambda: (low <= self.value) and (self.value <= high), timeout, True)
     if not result:
-      logprint("waiting for pv %s to become %s timed out" % (self.name, value))
+      logprint("waiting for pv %s to be between %s and %s timed out" % (self.name, low, high))
     return result
 
   def _ensure_monitored(self):
