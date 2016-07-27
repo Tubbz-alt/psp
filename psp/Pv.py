@@ -4,6 +4,7 @@ import sys
 import numpy
 import time
 import datetime
+import traceback
 
 """
    Pv module
@@ -85,7 +86,11 @@ class Pv(pyca.capv):
     else:
       self.__con_sem.clear()
     for (id, cb) in self.con_cbs.items():
-      cb(isconnected)
+      try:
+        cb(isconnected)
+      except Exception:
+        print "Exception in connection callback for {}:".format(self.name)
+        traceback.print_exc()
 
   def __getevt_handler(self, e=None):
     if e == None:
@@ -105,7 +110,11 @@ class Pv(pyca.capv):
       self.values.append(self.value)
       self.timestamps.append(self.timestamp())
     for (id, (cb, once)) in self.mon_cbs.items():
-      cb(e)
+      try:
+        cb(e)
+      except Exception:
+        print "Exception in monitor callback for {}:".format(self.name)
+        traceback.print_exc()
       if once and e == None:
         self.del_monitor_callback(id)
     if e == None:
