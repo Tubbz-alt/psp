@@ -251,7 +251,7 @@ class Pv(pyca.capv):
       self.put_data(value, tmo)
     return value
 
-  def get_enum_set(self, timeout=-1.0):
+  def get_enum_set(self, timeout=1.0):
     """
     Only valid for ENUM type PVs and Fields, will throw exception otherwise
     Retrieves the array of valid ENUM String values for this PV
@@ -261,6 +261,8 @@ class Pv(pyca.capv):
     pyca.attach_context()
     tmo = float(timeout)
     self.get_enum_strings(tmo)
+    self.enum_set = self.data["enum_set"]
+    return self.enum_set
 
   # "Higher level" methods.
   def wait_ready(self, timeout=None):
