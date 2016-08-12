@@ -83,6 +83,11 @@ class Pv(pyca.capv):
       if self.do_initialize:
         self.get_data(self.control, -1.0, self.count)
         pyca.flush_io()
+      if self.count is None:
+        try:
+          self.count = super(Pv, self).count()
+        except:
+          pass
     else:
       self.__con_sem.clear()
     for (id, cb) in self.con_cbs.items():
