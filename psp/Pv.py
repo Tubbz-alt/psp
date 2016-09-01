@@ -183,7 +183,10 @@ class Pv(pyca.capv):
     if count == None:
       count = self.count
     self.subscribe_channel(mask, ctrl, count)
-    self.get()
+    try:
+      self.get()
+    except:
+      pass
     self.ismonitored = True
 
   def unsubscribe(self):
