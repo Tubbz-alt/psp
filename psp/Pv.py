@@ -27,8 +27,15 @@ def now():
   return "%04d-%02d-%02d %02d:%02d:%02d.%03d" % ( now.year, now.month,now.day,
                      now.hour,now.minute,now.second,int(now.microsecond/1e3))
 
+def set_numpy(use_numpy):
+    """
+    set_numpy(True)  -> new Pv objects will use numpy for their arrays
+    set_numpy(False) -> new Pv objects will use tuples for their arrays
+    tuples are the default for legacy reasons
+    """
+    pyca.set_numpy(use_numpy)
+
 class Pv(pyca.capv):
-  
   def __init__(self, name, **kw):
     pyca.capv.__init__(self, name)
     self.__con_sem = threading.Event()
@@ -49,29 +56,28 @@ class Pv(pyca.capv):
     self.cbid = 1
     self.timestamps = []
     self.values = []
-    try:
-      self.count = kw['count']
-    except:
-      self.count = None
-    try:
-      self.control = kw['control']
-    except:
-      self.control = False
-    try:
-      m = kw['monitor']
-      if m == True:
-        self.do_monitor = True
-      elif m == False:
-        self.do_monitor = False
-      else:
-        self.do_monitor = True
-        self.add_monitor_callback(m)
-    except:
+
+    # value = kw.get(keyword, default)
+    self.count = kw.get('count', None)
+    self.control = kw.get('control', False)
+    self.do_initialize = kw.get('initialize', False)
+
+    m = kw.get('monitor', False)
+    if m == True:
+      self.do_monitor = True
+    elif m == False:
       self.do_monitor = False
+    else:
+      self.do_monitor = True
+      self.add_monitor_callback(m)
+
     try:
-      self.do_initialize = kw['initialize']
+      self.use_numpy = kw['use_numpy']
     except:
-      self.do_initialize = False
+      # pyca.capv sets this to a default value based on the internal state
+      # set by last call to pyca.set_numpy
+      pass
+
     if self.do_initialize:
       self.connect(None)
 
@@ -94,7 +100,7 @@ class Pv(pyca.capv):
       try:
         cb(isconnected)
       except Exception:
-        print "Exception in connection callback for {}:".format(self.name)
+        logprint("Exception in connection callback for {}:".format(self.name))
         traceback.print_exc()
 
   def __getevt_handler(self, e=None):
@@ -118,7 +124,7 @@ class Pv(pyca.capv):
       try:
         cb(e)
       except Exception:
-        print "Exception in monitor callback for {}:".format(self.name)
+        logprint("Exception in monitor callback for {}:".format(self.name))
         traceback.print_exc()
       if once and e == None:
         self.del_monitor_callback(id)
@@ -278,9 +284,26 @@ class Pv(pyca.capv):
 
   # The monitor callback used in wait_condition.
   def __wc_mon_cb(self, e, condition, sem):
-    if (e == None) and condition():
+    if (e == None) and self._all_cond(condition):
       sem.set()
       
+  # Adjust condition for np.ndarray comparisons
+  # Sometimes we want all to match, sometimes we want any
+  def _fn_cond(self, fn, condition):
+    def inner():
+      ok = condition()
+      try:
+        return fn(ok)
+      except TypeError:
+        return ok
+    return inner
+
+  def _all_cond(self, condition):
+    return _fn_cond(all, condition)
+
+  def _any_cond(self, condition):
+    return _fn_cond(any, condition)
+
   # Returns True if successfully waited, False if timeout.
   def wait_condition(self, condition, timeout=60, check_first=True):
     self._ensure_monitored()
@@ -297,21 +320,28 @@ class Pv(pyca.capv):
   def wait_until_change(self, timeout=60):
     self._ensure_monitored()
     value = self.value
-    result = self.wait_condition(lambda: self.value != value, timeout, True)
+    # Consider changed if any element is different
+    condition = self._any_cond(lambda: self.value != value)
+    result = self.wait_condition(condition, timeout, True)
     if not result:
       logprint("waiting for pv %s to change timed out" % self.name)
     return result
     
   def wait_for_value(self, value, timeout=60):
     self._ensure_monitored()
-    result = self.wait_condition(lambda: self.value == value, timeout, True)
+    # Consider correct value if all values match
+    condition = self._all_cond(lambda: self.value == value)
+    result = self.wait_condition(condition, timeout, True)
     if not result:
       logprint("waiting for pv %s to become %s timed out" % (self.name, value))
     return result
     
   def wait_for_range(self, low, high, timeout=60):
     self._ensure_monitored()
-    result = self.wait_condition(lambda: (low <= self.value) and (self.value <= high), timeout, True)
+    # Consider in range if all values above low and all below high
+    low_cond = self._all_cond(lambda: low <= self.value)
+    high_cond = self._all_cond(lambda: self.value <= high)
+    result = self.wait_condition(lambda: low_cond() and high_cond(), timeout, True)
     if not result:
       logprint("waiting for pv %s to be between %s and %s timed out" % (self.name, low, high))
     return result
