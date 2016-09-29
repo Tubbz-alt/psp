@@ -299,10 +299,10 @@ class Pv(pyca.capv):
     return inner
 
   def _all_cond(self, condition):
-    return _fn_cond(all, condition)
+    return self._fn_cond(all, condition)
 
   def _any_cond(self, condition):
-    return _fn_cond(any, condition)
+    return self._fn_cond(any, condition)
 
   # Returns True if successfully waited, False if timeout.
   def wait_condition(self, condition, timeout=60, check_first=True):
