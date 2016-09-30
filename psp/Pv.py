@@ -1,13 +1,13 @@
+from __future__ import print_function
 import sys
 import time
 import warnings
 import threading
 import traceback
 import numpy as np
-from __future__ import print_function
 
 import pyca
-import .utils
+import psp.utils as utils
 
 """
    Pv module
@@ -69,8 +69,9 @@ class Pv(pyca.capv):
                  **kw):
         
         pyca.capv.__init__(self, name)
-        
+
         #Threading Support
+        utils.ensure_context()
         self.__con_sem = threading.Event()
         self.__init_sem = threading.Event()
         if name in pyca_sems:
@@ -306,7 +307,6 @@ class Pv(pyca.capv):
         ----
         This function does not call pyca.flush_io
         """
-        pyca.attach_context()
         try:
             self.create_channel()
         
@@ -329,7 +329,6 @@ class Pv(pyca.capv):
         """
         Disconnect the associated channel
         """
-        pyca.attach_context()
         try:
             self.clear_channel()
         
@@ -368,8 +367,6 @@ class Pv(pyca.capv):
         --------
         :method:`.monitor_start`, :method:`.monitor_stop`
         """
-        pyca.attach_context()
-        
         if not self.isconnected:
             self.connect(DEFAULT_TIMEOUT)
         
@@ -398,7 +395,6 @@ class Pv(pyca.capv):
         --------
         :method:`.monitor_stop`
         """
-        pyca.attach_context()
         self.unsubscribe_channel()
         self.ismonitored = False
 
@@ -440,8 +436,6 @@ class Pv(pyca.capv):
         pyca.pyexc
             If PV connection fails
         """
-        pyca.attach_context()
-        
         if not count:
             count = self.count
         
@@ -487,7 +481,7 @@ class Pv(pyca.capv):
         return self.value
 
 
-    def put(self, value, timeout = DEFAULT_TIMEOUT **kw):
+    def put(self, value, timeout = DEFAULT_TIMEOUT, **kw):
         """
         Set the PV value
         
@@ -509,7 +503,6 @@ class Pv(pyca.capv):
         
         TODO : Add a put_complete which confirms the success of the function
         """
-        pyca.attach_context()
         if DEBUG != 0:
             logprint("caput %s in %s\n" % (value, self.name))
         
@@ -560,7 +553,6 @@ class Pv(pyca.capv):
         pyca.pyexc
             If the PV is not an ENUM type, this will be raised
         """
-        pyca.attach_context()
         tmo = float(timeout)
         self.get_enum_strings(tmo)
         self.enum_set = self.data["enum_set"]
@@ -584,7 +576,6 @@ class Pv(pyca.capv):
         pyca.pyexc
             If timeout is exceeded
         """
-        pyca.attach_context()
         pyca.flush_io()
         self.__init_sem.wait(timeout)
         if not self.__init_sem.isSet():
@@ -594,7 +585,7 @@ class Pv(pyca.capv):
     # The monitor callback used in wait_condition.
     def __wc_mon_cb(self, e, condition, sem):
         if (e == None) and utils.all_condition(condition):
-        sem.set()
+            sem.set()
       
 
     def wait_condition(self, condition, timeout=60, check_first=True):
@@ -723,7 +714,6 @@ class Pv(pyca.capv):
         """
         Make sure PV has been intialized and monitored
         """
-        pyca.attach_context()
         self.get()
         if not self.ismonitored:
             self.monitor()
@@ -758,7 +748,6 @@ class Pv(pyca.capv):
             overwriting the value attribute each time. This will change the
             :attr:`.monitor_append` attribute
         """
-        pyca.attach_context()
         if not self.isinitialized:
             if self.isconnected:
                 self.get_data(self.control, -1.0, self.count)
@@ -790,7 +779,6 @@ class Pv(pyca.capv):
         ----
         This does not clear the :attr:`values` list
         """
-        pyca.attach_context()
         if self.ismonitored:
             self.unsubscribe()
 
@@ -862,6 +850,7 @@ def add_pv_to_cache(pvname):
     PV : object
         A PV object         
     """
+    utils.ensure_context()
     if not pvname in pv_cache.keys():
         pv_cache[pvname] = Pv(pvname)
     return pv_cache[pvname]

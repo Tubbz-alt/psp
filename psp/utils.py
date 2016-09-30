@@ -22,6 +22,20 @@ def set_numpy(use_numpy):
     """
     pyca.set_numpy(use_numpy)
 
+def ensure_context():
+    """
+    Let pyca create/attach context if needed. This is important if we're using
+    the threading or multiprocessing modules.
+
+    There is no harm in calling this function extra times, nothing will happen
+    if the calls were unnecessary. The psp.Pv module will call this whenever a
+    psp.Pv.Pv object is returned.
+
+    The user may need to call this additional times if they are sharing pv
+    objects between threads or processes.
+    """
+    pyca.new_context()
+    pyca.attach_context()
 
 def _check_condition(fn, condition):
     """
