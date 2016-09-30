@@ -7,7 +7,7 @@ import traceback
 import numpy as np
 
 import pyca
-import psp.utils as utils
+from . import utils
 
 """
    Pv module
@@ -380,7 +380,19 @@ class Pv(pyca.capv):
             count = self.count
         
         self.subscribe_channel(mask, ctrl, count)
-        self.get() #This used to be in try / except block
+
+        # capv.get_data cannot be called inside a callback. Putting this
+        # inside a try/except block lets us skip this step when it would
+        # fail. Tons of code calls Pv.monitor inside a connection callback,
+        # such as our built-in Pv.__getevt_handler.
+        #
+        # The purpose of this step is to initialize the .value when we call
+        # .monitor() in an interactive session.
+        try:
+            self.get()
+        except pyca.caexc:
+            pass
+
         self.ismonitored = True
 
 
@@ -584,7 +596,7 @@ class Pv(pyca.capv):
 
     # The monitor callback used in wait_condition.
     def __wc_mon_cb(self, e, condition, sem):
-        if (e == None) and utils.all_condition(condition):
+        if (e == None) and condition():
             sem.set()
       
 
@@ -645,7 +657,7 @@ class Pv(pyca.capv):
         self._ensure_monitored()
         value = self.value
         # Consider changed if any element is different
-        condition = utils._any_condition(lambda: self.value != value)
+        condition = utils.any_condition(lambda: self.value != value)
         result = self.wait_condition(condition, timeout, True)
         if not result:
             logprint("waiting for pv %s to change timed out" % self.name)
@@ -672,7 +684,7 @@ class Pv(pyca.capv):
         """
         self._ensure_monitored()
         # Consider correct value if all values match
-        condition = utils._all_cond(lambda: self.value == value)
+        condition = utils.all_condition(lambda: self.value == value)
         result = self.wait_condition(condition, timeout, True)
         if not result:
             logprint("waiting for pv %s to become %s timed out" % (self.name, value))

@@ -37,7 +37,7 @@ def ensure_context():
     pyca.new_context()
     pyca.attach_context()
 
-def _check_condition(fn, condition):
+def check_condition(fn, condition):
     """
     Check an arbitrary condition with against an arbitrary function
     """
@@ -49,19 +49,18 @@ def _check_condition(fn, condition):
             return ok
     return inner
 
-def _any_condition(condition):
+def any_condition(condition):
     """
     Check that any element in an array meets an arbitrary condition
     """
-    return self._check_condition(any,condition)
+    return check_condition(any,condition)
 
 
-def _all_condition(condition):
+def all_condition(condition):
     """
     Check that all elements in an array meets an arbitrary condition
     """
-    return self._check_condition(all,condition)
-
+    return check_condition(all,condition)
 
 
 class TimeoutSem(object):
