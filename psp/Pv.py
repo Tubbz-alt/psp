@@ -1,10 +1,13 @@
-import pyca
-import threading
 import sys
-import numpy
 import time
-import datetime
+import warnings
+import threading
 import traceback
+import numpy as np
+from __future__ import print_function
+
+import pyca
+import .utils
 
 """
    Pv module
@@ -12,551 +15,1130 @@ import traceback
    
 """
 
-def __printfn(s):
-  print s
+def now():
+    warnings.warn('This function has been moved to psp.utils, '\
+                  'it will be deprecated soon.',
+                  warnings.DeprecationWarning)
+    return utils.now()
 
-logprint        = __printfn
+
+logprint        = print
 DEBUG           = 0
 pv_cache        = {}
 pyca_sems       = {}
 DEFAULT_TIMEOUT = 1.0
 
-def now():
-  """ returns string with current date and time (with millisecond resolution)"""
-  now = datetime.datetime.now()
-  return "%04d-%02d-%02d %02d:%02d:%02d.%03d" % ( now.year, now.month,now.day,
-                     now.hour,now.minute,now.second,int(now.microsecond/1e3))
-
-def set_numpy(use_numpy):
-    """
-    set_numpy(True)  -> new Pv objects will use numpy for their arrays
-    set_numpy(False) -> new Pv objects will use tuples for their arrays
-    tuples are the default for legacy reasons
-    """
-    pyca.set_numpy(use_numpy)
 
 class Pv(pyca.capv):
-  def __init__(self, name, **kw):
-    pyca.capv.__init__(self, name)
-    self.__con_sem = threading.Event()
-    self.__init_sem = threading.Event()
-    if name in pyca_sems:
-      self.__pyca_sem = pyca_sems[name]
-    else:
-      self.__pyca_sem = pyca_sems[name] = threading.Lock()
-    self.connect_cb  = self.__connection_handler
-    self.monitor_cb  = self.__monitor_handler
-    self.getevt_cb   = self.__getevt_handler
-    self.ismonitored   = False
-    self.isconnected   = False
-    self.isinitialized = False
-    self.monitor_append = False
-    self.con_cbs = {}
-    self.mon_cbs = {}
-    self.cbid = 1
-    self.timestamps = []
-    self.values = []
+    """
+    The base class to represent a Channel Access PV
+    
+    Many of the parameters can be modified on a per get/put call basis,
+    however, the default behaviour will be determined by the state variables of
+    the class.
 
-    # value = kw.get(keyword, default)
-    self.count = kw.get('count', None)
-    self.control = kw.get('control', False)
-    self.do_initialize = kw.get('initialize', False)
+    Parameters
+    ----------
+    name : str
+        Name of the PV 
 
-    m = kw.get('monitor', False)
-    if m == True:
-      self.do_monitor = True
-    elif m == False:
-      self.do_monitor = False
-    else:
-      self.do_monitor = True
-      self.add_monitor_callback(m)
+    initialize : bool , optional
+        Whether to attempt to connect to the PV upon creation of the class. If
+        True a connection will be attempted and data will be requested 
+    
+    control : bool, optional 
+        Whether to gather the control Channel Access data type or the time. 
 
-    try:
-      self.use_numpy = kw['use_numpy']
-    except:
-      # pyca.capv sets this to a default value based on the internal state
-      # set by last call to pyca.set_numpy
-      pass
+    monitor : callable or bool, optional
+        The choice to begin monitoring the PV upon initialization. A callable
+        can also be passed and will automatically be added as a monitor callback
+        using the method :method:`.add_monitor_callback`
 
-    if self.do_initialize:
-      self.connect(None)
+    count : int, optional
+        If the PV interfaces with a waveform record, a smaller subsection of
+        the array can be selected by setting this to the number of elements you
+        wish to interact with.
+   
+    use_numpy : bool, optional
+        If set to True and the PV is a waveform record, the return of get / put
+        will be a NumPy type. By default, the PV will use the current pyca setting
+        that can be modifed by using :func:`utils.set_numpy`
+    """
+    def __init__(self, name, initialize=False, count=None,
+                 control=False, monitor=False, use_numpy=None,
+                 **kw):
+        
+        pyca.capv.__init__(self, name)
+        
+        #Threading Support
+        self.__con_sem = threading.Event()
+        self.__init_sem = threading.Event()
+        if name in pyca_sems:
+            self.__pyca_sem = pyca_sems[name]
+        else:
+            self.__pyca_sem = pyca_sems[name] = threading.Lock()
+        
+        #Callback handlers / storage
+        self.cbid = 1
+        self.con_cbs = {}
+        self.mon_cbs = {}
+        self.connect_cb  = self.__connection_handler
+        self.monitor_cb  = self.__monitor_handler
+        self.getevt_cb   = self.__getevt_handler
+        
+        #State variables 
+        self.ismonitored    = False
+        self.isconnected    = False
+        self.isinitialized  = False
+        self.monitor_append = False
+        
+        self.count     = count
+        self.control   = control
+        self.use_numpy = use_numpy
+        self.do_initialize = initialize
+        
+        self.timestamps = []
+        self.values     = []
 
-  # Channel access callbacks
-  def __connection_handler(self, isconnected):
-    self.isconnected = isconnected
-    if isconnected:
-      self.__con_sem.set()
-      if self.do_initialize:
-        self.get_data(self.control, -1.0, self.count)
-        pyca.flush_io()
-      if self.count is None:
+        #Create monitors 
+        if isinstance(monitor,bool):
+                self.do_monitor = monitor
+        else:
+            self.do_monitor = True
+            self.add_monitor_callback(monitor)
+
+        
+        if monitor == True:
+            self.do_monitor = True
+        elif monitor == False:
+            self.do_monitor = False
+        else:
+            self.do_monitor = True
+            self.add_monitor_callback(monitor)
+
+        if self.do_initialize:
+            self.connect(None)
+
+
+    # Channel access callbacks
+    def __connection_handler(self, isconnected):
+        """
+        Called by Channel Access when connection state changes
+        """
+        self.isconnected = isconnected
+        
+        if isconnected:
+            self.__con_sem.set()
+        
+        if self.do_initialize:
+            self.get_data(self.control, -1.0, self.count)
+            pyca.flush_io()
+        
+        if self.count is None:
+            try:
+                self.count = super(Pv, self).count()
+            except:
+                pass
+        else:
+            self.__con_sem.clear()
+        
+        for (id, cb) in self.con_cbs.items():
+            try:
+                cb(isconnected)
+            except Exception:
+                logprint("Exception in connection callback for {}:".format(self.name))
+                traceback.print_exc()
+
+
+    def __getevt_handler(self, e=None):
+        """
+        Called when data is requested over the Channel
+        """
+        if e == None:
+            self.isinitialized = True
+            self.do_initialize = False
+            self.getevt_cb = None
+            if self.do_monitor:
+                self.monitor(pyca.DBE_VALUE | pyca.DBE_LOG | pyca.DBE_ALARM,
+                             self.control, self.count)
+                pyca.flush_io()
+            self.__init_sem.set()
+
+
+    def __monitor_handler(self, e=None):
+        """
+        Called during a monitor event
+        """
+        if not self.isinitialized:
+            self.__getevt_handler(e)
+        if self.monitor_append:
+            self.values.append(self.value)
+            self.timestamps.append(self.timestamp())
+        for (id, (cb, once)) in self.mon_cbs.items():
+            try:
+                cb(e)
+            except Exception:
+                logprint("Exception in monitor callback for {}:".format(self.name))
+                traceback.print_exc()
+            if once and e == None:
+                self.del_monitor_callback(id)
+        if e == None:
+            if DEBUG != 0:
+                logprint("%s monitoring %s %s" % (utils.now(), self.name, self.timestr()))
+                logprint(self.value)
+        else:
+            logprint("%-30s %s" % (self.name, e))
+
+
+    def add_connection_callback(self, cb):
+        """
+        Add a connection callback
+
+        Parameters
+        ----------
+        cb : callable
+            A function to be run when the PV object makes a Channel Access
+            connection. The function must accept one boolean variable which
+            represents the success of the connection attempt.
+
+        Returns
+        -------
+        id : int
+            An integer ID number for the callback, which can be later used to
+            delete the callback
+
+        See Also
+        --------
+        :method:`.add_monitor_callback`
+        """
+        id = self.cbid
+        self.cbid += 1
+        self.con_cbs[id] = cb
+        return id
+
+
+    def del_connection_callback(self, id):
+        """
+        Delete a connection callback
+        
+        Parameters
+        ----------
+        id : int
+            The id of the callback to be deleted
+
+        Raises
+        ------
+        KeyError
+            If the id does not correspond to an existing callback    
+        """
+        del self.con_cbs[id]
+
+
+    def add_monitor_callback(self, cb, once=False):
+        """
+        Add a monitor callback
+
+        Parameters
+        ----------
+        cb : callable
+            A function to be run when the PV object makes a Channel Access sees
+            a monitor event. The function must accept one boolean variable
+            which represents the success of the connection attempt.
+
+        Returns
+        -------
+        id : int
+            An integer ID number for the callback, which can be later used to
+            delete the callback
+
+        See Also
+        --------
+        :method:`.add_connection_callback`
+        """ 
+        id = self.cbid
+        self.cbid += 1
+        self.mon_cbs[id] = (cb, once)
+        return id
+
+
+    def del_monitor_callback(self, id):
+        """
+        Delete a monitor callback
+        
+        Parameters
+        ----------
+        id : int
+            The id of the callback to be deleted
+
+        Raises
+        ------
+        KeyError
+            If the id does not correspond to an existing callback    
+        """
+        del self.mon_cbs[id]
+
+
+    def connect(self, timeout=None):
+        """
+        Create a connection to the PV through Channel Access
+        
+        If a timeout is specified, the function will wait for the connection
+        state to report back as a success, raising an Exception upon failure.
+        However, if no timeout is specified, no Exception will be raised, even
+        upon a failed connection
+        
+        Parameters
+        ----------
+        timeout : float, optional 
+            The amount of time to wait for PV to make connection 
+
+        Returns
+        -------
+        isconnected : bool
+            The connection state
+        
+        Raises      
+        ------
+        pyca.pyexc
+            If the user defined timeout is exceeded
+        
+        Note
+        ----
+        This function does not call pyca.flush_io
+        """
+        pyca.attach_context()
         try:
-          self.count = super(Pv, self).count()
-        except:
-          pass
-    else:
-      self.__con_sem.clear()
-    for (id, cb) in self.con_cbs.items():
-      try:
-        cb(isconnected)
-      except Exception:
-        logprint("Exception in connection callback for {}:".format(self.name))
-        traceback.print_exc()
+            self.create_channel()
+        
+        except pyca.pyexc:
+            logprint('Channel for PV {:} already exists'.format(self.name))
+            return self.isconnected 
 
-  def __getevt_handler(self, e=None):
-    if e == None:
-      self.isinitialized = True
-      self.do_initialize = False
-      self.getevt_cb = None
-      if self.do_monitor:
-        self.monitor(pyca.DBE_VALUE | pyca.DBE_LOG | pyca.DBE_ALARM,
-                     self.control, self.count)
-        pyca.flush_io()
-      self.__init_sem.set()
+        if timeout != None:
+            tmo = float(timeout)
+            if tmo > 0:
+                self.__con_sem.wait(tmo)
+                if not self.__con_sem.isSet():
+                    self.disconnect()
+                    raise pyca.pyexc, "connection timedout for PV %s" % self.name
+        
+        return self.isconnected
 
-  def __monitor_handler(self, e=None):
-    if not self.isinitialized:
-      self.__getevt_handler(e)
-    if self.monitor_append:
-      self.values.append(self.value)
-      self.timestamps.append(self.timestamp())
-    for (id, (cb, once)) in self.mon_cbs.items():
-      try:
-        cb(e)
-      except Exception:
-        logprint("Exception in monitor callback for {}:".format(self.name))
-        traceback.print_exc()
-      if once and e == None:
-        self.del_monitor_callback(id)
-    if e == None:
-      if DEBUG != 0:
-        logprint("%s monitoring %s %s" % (now(), self.name, self.timestr()))
-        logprint(self.value)
-    else:
-      logprint("%-30s %s" % (self.name, e))
 
-  def add_connection_callback(self, cb):
-    id = self.cbid
-    self.cbid += 1
-    self.con_cbs[id] = cb
-    return id
+    def disconnect(self):
+        """
+        Disconnect the associated channel
+        """
+        pyca.attach_context()
+        try:
+            self.clear_channel()
+        
+        except pyca.pyexc:
+            logprint('Channel for PV {:} is already '\
+                     'disconnected'.format(self.name)) 
+        
+        self.isconnected = False
+  
 
-  def del_connection_callback(self, id):
-    del self.con_cbs[id]
+    def monitor(self, mask=pyca.DBE_VALUE | pyca.DBE_LOG | pyca.DBE_ALARM,
+                ctrl=None, count=None):
+        """
+        Subscribe to monitor events from the PV channel
+        
+        Much of the functionality of this method is wrapped in higher level
+        utilities
 
-  def add_monitor_callback(self, cb, once=False):
-    id = self.cbid
-    self.cbid += 1
-    self.mon_cbs[id] = (cb, once)
-    return id
+        Parameters
+        ----------
+        mask : int
+            Mask to select which monitor events to subscribe to using pyca
+            variables including, pyca.DBE_VALUE for changes to PV value,
+            pyca.DBE_ALARM, for changes in the alarm state, and pyca.DBE_LOG
+            for anything else
 
-  def del_monitor_callback(self, id):
-    del self.mon_cbs[id]
+        ctrl : bool, optional
+            Choice to monitor the control or time value. By default,
+            :attr:`.control` is used
 
-  # Calls to channel access methods
-  # Note that these don't call pyca.flush_io()!
-  def connect(self, timeout=None):
-    pyca.attach_context()
-    try:
-      self.create_channel()
-    except pyca.pyexc:
-      pass
-    if timeout != None:
-      tmo = float(timeout)
-      if tmo > 0:
-        self.__con_sem.wait(tmo)
-        if not self.__con_sem.isSet():
-          self.disconnect()
-          raise pyca.pyexc, "connection timedout for PV %s" % self.name
+        count : int, optional
+            Subsection of waveform record to monitor. By default,
+            :attr:`.count` is used
+        
+        See Also
+        --------
+        :method:`.monitor_start`, :method:`.monitor_stop`
+        """
+        pyca.attach_context()
+        
+        if not self.isconnected:
+            self.connect(DEFAULT_TIMEOUT)
+        
+        if not self.isconnected:
+            raise pyca.pyexc, "monitor: connection timedout for PV %s" % self.name
+        
+        if ctrl == None:
+            ctrl = self.control
+        
+        if count == None:
+            count = self.count
+        
+        self.subscribe_channel(mask, ctrl, count)
+        self.get() #This used to be in try / except block
+        self.ismonitored = True
 
-  def disconnect(self):
-    pyca.attach_context()
-    try:
-      self.clear_channel()
-    except pyca.pyexc:
-      pass
-    self.isconnected = False
 
-  def monitor(self, mask=pyca.DBE_VALUE | pyca.DBE_LOG | pyca.DBE_ALARM,
-              ctrl=None, count=None):
-    pyca.attach_context()
-    if not self.isconnected:
-      self.connect(DEFAULT_TIMEOUT)
-      if not self.isconnected:
-        raise pyca.pyexc, "monitor: connection timedout for PV %s" % self.name
-    if ctrl == None:
-      ctrl = self.control
-    if count == None:
-      count = self.count
-    self.subscribe_channel(mask, ctrl, count)
-    try:
-      self.get()
-    except:
-      pass
-    self.ismonitored = True
+    def unsubscribe(self):
+        """
+        Close Channel Access Subscription
+        
+        This is the lower level implementation. It is best to use
+        :method:`monitor_stop instead.
+        
+        See Also
+        --------
+        :method:`.monitor_stop`
+        """
+        pyca.attach_context()
+        self.unsubscribe_channel()
+        self.ismonitored = False
 
-  def unsubscribe(self):
-    pyca.attach_context()
-    self.unsubscribe_channel()
-    self.ismonitored = False
 
-  def get(self, **kw):
-    pyca.attach_context()
-    if DEBUG != 0:
-      logprint("caget %s: " % self.name)
-    if not self.isconnected:
-      self.connect(DEFAULT_TIMEOUT)
-      if not self.isconnected:
-        raise pyca.pyexc, "get: connection timedout for PV %s" % self.name
-    try:
-      ctrl = kw['ctrl']
-      if ctrl == None:
-        ctrl = False
-    except:
-      ctrl = self.control
-    try:
-      count = kw['count']
-    except:
-      count = self.count
-    try:
-      timeout = kw['timeout']
-      if timeout != None:
+    def get(self, count=None, timeout=DEFAULT_TIMEOUT, as_string=False, **kw):
+        """
+        Get and return the value of the PV
+        
+        If the PV has not been previously connected, this will automatically
+        attempt to use :method:`.connect`. If you are expecting a waveform PV
+        and want to choose to use a numpy array or not, set the attribute
+        :attr:`.use_numpy`.
+        
+        Parameters
+        ----------
+        count : int, optional
+            Maximum number of array elements to be return. By default uses
+            :attr:`.count`
+        
+        ctrl : bool, optional
+            Whether to get the control form information
+
+        timeout : float or None, optional
+            Time to wait for data to be returned. If None, no timeout is used
+
+        as_string : bool , optional
+            Return the value as a string type. For Enum PVs, the default
+            behavior is to return the integer representing the current value.
+            However, if as_string is set to True, this will return the
+            associated string for the Enum
+
+        Returns
+        -------
+        value : float, int, str
+            Current value of the PV
+        
+        Raises
+        ------
+        pyca.pyexc
+            If PV connection fails
+        """
+        pyca.attach_context()
+        
+        if not count:
+            count = self.count
+        
+        if timeout:
+            try:
+                tmo = float(timeout)
+            except ValueError:
+                tmo = DEFAULT_TIMEOUT
+        else:
+            tmo = -1.0
+
+        try:
+            ctrl = kw['ctrl']
+            if ctrl == None:
+                ctrl = False
+        
+        except KeyError:
+            ctrl = self.control
+
+        if DEBUG != 0:
+            logprint("caget %s: " % self.name)
+        
+        if not self.isconnected and not self.connect(DEFAULT_TIMEOUT):
+            raise pyca.pyexc, "get: connection timedout for PV %s" % self.name
+        
+        with utils.TimeoutSem(self.__pyca_sem, tmo):
+            self.get_data(ctrl, tmo, count)
+        
+        if tmo > 0 and DEBUG != 0:
+            logprint("got %s\n" % self.value.__str__())
+        
+        if as_string:
+            if p.type() == 'DBF_ENUM':
+                enums = p.get_enum_set(timeout=tmo)
+                if len(enums) > self.value >= 0:
+                    return enums[self.value]
+                else:
+                    raise IndexError('{:} is not a valid enumeration '\
+                                     'of {:}'.format(self.value,self.name))
+            else:
+                return str(self.value)
+
+        return self.value
+
+
+    def put(self, value, timeout = DEFAULT_TIMEOUT **kw):
+        """
+        Set the PV value
+        
+        If the PV has not been previously connected, this will automatically
+        attempt to use :method:`.connect`.
+
+        Parameters
+        ----------
+        value : float, int, str or array
+            Desired PV value
+        
+        timeout : float or None, optional
+            Time to wait for put to be completed. If None, no timeout is used
+        
+        Returns
+        -------
+        value : float, int, str, or array
+            The value given to the PV
+        
+        TODO : Add a put_complete which confirms the success of the function
+        """
+        pyca.attach_context()
+        if DEBUG != 0:
+            logprint("caput %s in %s\n" % (value, self.name))
+        
+        if timeout:
+            try:
+                tmo = float(timeout)
+            except ValueError:
+                tmo = DEFAULT_TIMEOUT
+        else:
+            tmo = -1.0
+        
+        if not self.isinitialized:
+            if self.isconnected:
+                self.get_data(self.control, -1.0, self.count)
+                pyca.flush_io()
+            else:
+                self.do_initialize = True
+                self.connect()
+            
+            self.wait_ready(DEFAULT_TIMEOUT * 2)
+        
+        with utils.TimeoutSem(self.__pyca_sem, tmo):
+            self.put_data(value, tmo)
+        
+        return value
+
+    def get_enum_set(self, timeout=1.0):
+        """
+        Return the ENUM types associated with the PV
+
+        Since this information usually only changes when an IOC is remade, it is
+        only neccesary to get this information once. After the first call, the
+        tuple is store in the dictionary :attr:`data` and accesible via the
+        property :attr:`enum_set`
+
+        Parameters
+        ----------
+        timeout : float or None, optional
+            Maximum time to wait to hear a response
+
+        Returns
+        -------
+        enum_set : tuple
+            A tuple of each ENUM value with the associated integer as the index
+        
+        Raises
+        ------
+        pyca.pyexc
+            If the PV is not an ENUM type, this will be raised
+        """
+        pyca.attach_context()
         tmo = float(timeout)
-      else:
-        tmo = -1.0
-    except:
-      tmo = DEFAULT_TIMEOUT
-    with TimeoutSem(self.__pyca_sem, tmo):
-      self.get_data(ctrl, tmo, count)
-    if tmo > 0 and DEBUG != 0:
-      logprint("got %s\n" % self.value.__str__())
-    try:
-      if kw['as_string']:
-        return str(self.value)
-    except:
-      pass
-    return self.value
+        self.get_enum_strings(tmo)
+        self.enum_set = self.data["enum_set"]
+        return self.enum_set
 
-  def put(self, value, **kw):
-    pyca.attach_context()
-    if DEBUG != 0:
-      logprint("caput %s in %s\n" % (value, self.name))
-    if not self.isinitialized:
-      if self.isconnected:
-        self.get_data(self.control, -1.0, self.count)
+###########################
+#  "Higher level" methods #
+###########################
+
+    def wait_ready(self, timeout=None):
+        """
+        Wait for the PV to be initialized
+
+        Parameters
+        ----------
+        timeout : float or None, optional
+            Maximum time to wait to hear a response
+
+        Raises
+        ------
+        pyca.pyexc
+            If timeout is exceeded
+        """
+        pyca.attach_context()
         pyca.flush_io()
-      else:
-        self.do_initialize = True
-        self.connect()
-      self.wait_ready(DEFAULT_TIMEOUT * 2)
-    try:
-      timeout = kw['timeout']
-      if timeout != None:
-        tmo = float(timeout)
-      else:
-        tmo = -1.0
-    except:
-      tmo = DEFAULT_TIMEOUT
-    with TimeoutSem(self.__pyca_sem, tmo):
-      self.put_data(value, tmo)
-    return value
+        self.__init_sem.wait(timeout)
+        if not self.__init_sem.isSet():
+            raise pyca.pyexc, "ready timedout for PV %s" %(self.name)
 
-  def get_enum_set(self, timeout=1.0):
-    """
-    Only valid for ENUM type PVs and Fields, will throw exception otherwise
-    Retrieves the array of valid ENUM String values for this PV
-    Array index is ENUM Integer value
-    Array is stored in the 'data' member, or is available directly as Pv.enum_set
-    """
-    pyca.attach_context()
-    tmo = float(timeout)
-    self.get_enum_strings(tmo)
-    self.enum_set = self.data["enum_set"]
-    return self.enum_set
 
-  # "Higher level" methods.
-  def wait_ready(self, timeout=None):
-    pyca.attach_context()
-    pyca.flush_io()
-    self.__init_sem.wait(timeout)
-    if not self.__init_sem.isSet():
-        raise pyca.pyexc, "ready timedout for PV %s" %(self.name)
-
-  # The monitor callback used in wait_condition.
-  def __wc_mon_cb(self, e, condition, sem):
-    if (e == None) and self._all_cond(condition):
-      sem.set()
+    # The monitor callback used in wait_condition.
+    def __wc_mon_cb(self, e, condition, sem):
+        if (e == None) and utils.all_condition(condition):
+        sem.set()
       
-  # Adjust condition for np.ndarray comparisons
-  # Sometimes we want all to match, sometimes we want any
-  def _fn_cond(self, fn, condition):
-    def inner():
-      ok = condition()
-      try:
-        return fn(ok)
-      except TypeError:
-        return ok
-    return inner
 
-  def _all_cond(self, condition):
-    return self._fn_cond(all, condition)
+    def wait_condition(self, condition, timeout=60, check_first=True):
+        """
+        Wait for an arbitray condition to be True
 
-  def _any_cond(self, condition):
-    return self._fn_cond(any, condition)
+        Parameters
+        ----------
+        condition : callable
+            Method to be run with no arguments that returns a bool
 
-  # Returns True if successfully waited, False if timeout.
-  def wait_condition(self, condition, timeout=60, check_first=True):
-    self._ensure_monitored()
-    sem = threading.Event()
-    id = self.add_monitor_callback(lambda e: self.__wc_mon_cb(e, condition, sem),
-                                   False)
-    if check_first and condition():
-      self.del_monitor_callback(id)
-      return True
-    sem.wait(timeout)
-    self.del_monitor_callback(id)
-    return sem.is_set()
+        timeout : float, optional
+            Maximum time to wait for condition to evaluate to True
+        
+        check_first : bool, optional
+            Whether to check if the condition currently evaluates to True
+            first.  Since the wait condition is only retried from a monitor
+            callback, the condition will only be rechecked when the PV receives
+            a monitor event. This means that if you don't immediatelly check
+            the wait condition and then the PV never receives a monitor event
+            the condition will never be tested
+        
+        Returns
+        -------
+        result : bool
+            Whether or not the wait has stopped due to a timeout (False) or
+            because the condition has evaluated to True
+        """
+        self._ensure_monitored()
+        sem = threading.Event()
+        id = self.add_monitor_callback(lambda e: self.__wc_mon_cb(e, condition, sem),
+                                       False)
+        if check_first and condition():
+            self.del_monitor_callback(id)
+            return True
     
-  def wait_until_change(self, timeout=60):
-    self._ensure_monitored()
-    value = self.value
-    # Consider changed if any element is different
-    condition = self._any_cond(lambda: self.value != value)
-    result = self.wait_condition(condition, timeout, True)
-    if not result:
-      logprint("waiting for pv %s to change timed out" % self.name)
-    return result
+        sem.wait(timeout)
+        self.del_monitor_callback(id)
+        return sem.is_set()
+
+
+    def wait_until_change(self, timeout=60):
+        """
+        Wait until the PV value changes
+        
+        Parameters
+        ----------
+        timeout : float, optional
+            Maximum time to wait for PV value to change
+
+        Returns
+        -------
+        result : bool
+            Whether or not the wait has stopped due to a timeout (False) or
+            because the PV value has changed
+        """
+        self._ensure_monitored()
+        value = self.value
+        # Consider changed if any element is different
+        condition = utils._any_condition(lambda: self.value != value)
+        result = self.wait_condition(condition, timeout, True)
+        if not result:
+            logprint("waiting for pv %s to change timed out" % self.name)
+        return result
+   
+
+    def wait_for_value(self, value, timeout=60):
+        """
+        Wait for a PV to reach a specific value
+        
+        Parameters
+        ----------
+        value : float, int, string
+            The desired value to wait for the PV to reach
+
+        timeout : float, optional
+            Maximum time to wait for PV value to reach value
+
+        Returns
+        -------
+        result : bool
+            Whether or not the wait has stopped due to a timeout (False) or
+            because the PV value has reached the value
+        """
+        self._ensure_monitored()
+        # Consider correct value if all values match
+        condition = utils._all_cond(lambda: self.value == value)
+        result = self.wait_condition(condition, timeout, True)
+        if not result:
+            logprint("waiting for pv %s to become %s timed out" % (self.name, value))
+        return result
     
-  def wait_for_value(self, value, timeout=60):
-    self._ensure_monitored()
-    # Consider correct value if all values match
-    condition = self._all_cond(lambda: self.value == value)
-    result = self.wait_condition(condition, timeout, True)
-    if not result:
-      logprint("waiting for pv %s to become %s timed out" % (self.name, value))
-    return result
-    
-  def wait_for_range(self, low, high, timeout=60):
-    self._ensure_monitored()
-    # Consider in range if all values above low and all below high
-    low_cond = self._all_cond(lambda: low <= self.value)
-    high_cond = self._all_cond(lambda: self.value <= high)
-    result = self.wait_condition(lambda: low_cond() and high_cond(), timeout, True)
-    if not result:
-      logprint("waiting for pv %s to be between %s and %s timed out" % (self.name, low, high))
-    return result
 
-  def _ensure_monitored(self):
-    pyca.attach_context()
-    self.get()
-    if not self.ismonitored:
-      self.monitor()
-      pyca.flush_io()
+    def wait_for_range(self, low, high, timeout=60):
+        """
+        Wait for a PV to enter a specific range
+        
+        Parameters
+        ----------
+        low : float, int
+            The lower bound of the desired range
 
-  def timestamp(self):
-    return (self.secs + pyca.epoch, self.nsec)
+        high : float, int
+            The upper bound of the desired range
 
-  def timestr(self):
-    """ make a time string (with ns resolution) using PV time stamp """
-    ts = time.localtime(self.secs+pyca.epoch)
-    tstr = time.strftime("%Y-%m-%d %H:%M:%S", ts)
-    tstr = tstr + ".%09d" % self.nsec
-    return tstr
+        timeout : float, optional
+            Maximum time to wait for PV value to reach value
 
-  # Start monitoring and/or appending.
-  def monitor_start(self, monitor_append=False):
-    """ start monitoring for the Pv, new values are added to the `values` 
-        list if monitor_append is True """
-    pyca.attach_context()
-    if not self.isinitialized:
-      if self.isconnected:
-        self.get_data(self.control, -1.0, self.count)
-        pyca.flush_io()
-      else:
-        self.do_initialize = True
-        self.connect()
-      self.wait_ready()
-    if self.ismonitored:
-      if monitor_append == self.monitor_append:
-        return
-      if monitor_append:
+        Returns
+        -------
+        result : bool
+            Whether or not the wait has stopped due to a timeout (False) or
+            because the PV value has reached the value
+        """
+        self._ensure_monitored()
+        # Consider in range if all values above low and all below high
+        low_cond = utils.all_condition(lambda: low <= self.value)
+        high_cond = utils.all_condition(lambda: self.value <= high)
+        result = self.wait_condition(lambda: low_cond() and high_cond(), timeout, True)
+        if not result:
+            logprint("waiting for pv %s to be between %s and %s timed out" % (self.name, low, high))
+        return result
+
+  
+    def _ensure_monitored(self):
+        """
+        Make sure PV has been intialized and monitored
+        """
+        pyca.attach_context()
+        self.get()
+        if not self.ismonitored:
+            self.monitor()
+            pyca.flush_io()
+
+
+    def timestamp(self):
+        """
+        Return a timestamp from the last time the PV received an update
+        """
+        return (self.secs + pyca.epoch, self.nsec)
+
+
+    def timestr(self):
+        """
+        Return a string representation of the PV timestamp
+        """
+        ts = time.localtime(self.secs+pyca.epoch)
+        tstr = time.strftime("%Y-%m-%d %H:%M:%S", ts)
+        tstr = tstr + ".%09d" % self.nsec
+        return tstr
+
+
+    def monitor_start(self, monitor_append=False):
+        """
+        Start a monitoring process on the PV channel.
+        
+        Parameters
+        ----------
+        monitor_apppend : bool, optional
+            The choice of storing all updated values in a list, or simply
+            overwriting the value attribute each time. This will change the
+            :attr:`.monitor_append` attribute
+        """
+        pyca.attach_context()
+        if not self.isinitialized:
+            if self.isconnected:
+                self.get_data(self.control, -1.0, self.count)
+                pyca.flush_io()
+            else:
+                self.do_initialize = True
+                self.connect()
+            
+            self.wait_ready()
+        
+        if self.ismonitored:
+            if monitor_append == self.monitor_append:
+                return
+            if monitor_append:
+                self.monitor_clear()
+            self.monitor_append = monitor_append
+            return
+        self.monitor_append = monitor_append
         self.monitor_clear()
-      self.monitor_append = monitor_append
-      return
-    self.monitor_append = monitor_append
-    self.monitor_clear()
-    self.monitor()
-    pyca.flush_io()
-
-  def monitor_stop(self):
-    """ stop  monitoring for the Pv, note that this does not clear the 
-        `values` list """
-    pyca.attach_context()
-    if self.ismonitored:
-      self.unsubscribe()
-
-  def monitor_clear(self):
-    """ clear the `values` list """
-    self.values = []
-    self.timestamps = []
-
-  def monitor_get(self):
-    """ retuns statistics for the current `values` list as dictionary """
-    a=numpy.array(self.values[1:])
-    ret = {}
-    if (len(a)==0):
-      ret["mean"]=ret["std"]=ret["err"]=numpy.nan
-      ret["num"]=0
-      if DEBUG != 0:
-        logprint("No pulses.... while monitoring %s" % self.name)
-      return ret
-    ret["mean"]=a.mean()
-    ret["std"] =a.std()
-    ret["num"] =len(a)
-    ret["err"] =ret["std"]/numpy.sqrt(ret["num"])
-    if DEBUG != 0:
-      logprint("get monitoring for %s" % self.name)
-    return ret
-
-  # Re-define getattr method to allow direct access to 'data' dictionary members
-  def __getattr__(self, name):
-    if self.data.has_key(name):
-      return self.data[name]
-    else:
-      return self.__dict__[name]
+        self.monitor()
+        pyca.flush_io()
 
 
-class TimeoutSem(object):
-  """
-  Context manager/wrapper for semaphores, with a timeout on the acquire call.
-  Timeout < 0 blocks indefinitely.
-
-  Usage:
-  with TimeoutSem(<Semaphore or Lock>, <timeout>):
-    <code block>
-  """
-  def __init__(self, sem, timeout=-1):
-    self.sem = sem
-    self.timeout = timeout
-
-  def __enter__(self):
-    self.acq = False
-    if self.timeout < 0:
-      self.acq = self.sem.acquire(True)
-    elif self.timeout == 0:
-      self.acq = self.sem.acquire(False)
-    else:
-      self.tmo = threading.Timer(self.timeout, self.raise_tmo)
-      self.tmo.start()
-      self.acq = self.sem.acquire(True)
-      self.tmo.cancel()
-    if not self.acq:
-      self.raise_tmo()
-
-  def __exit__(self, type, value, traceback):
-    try:
-      if self.acq:
-        self.sem.release()
-    except threading.ThreadError:
-      pass
-    try:
-      self.tmo.cancel()
-    except AttributeError:
-      pass
-
-  def raise_tmo(self):
-    raise threading.ThreadError("semaphore acquire timed out")
+    def monitor_stop(self):
+        """
+        Stop monitoring the channel for updates
+        
+        Note
+        ----
+        This does not clear the :attr:`values` list
+        """
+        pyca.attach_context()
+        if self.ismonitored:
+            self.unsubscribe()
 
 
-# Stand alone routines!
+    def monitor_clear(self):
+        """ 
+        Clear the :attr:`values` list
+        """
+        self.values = []
+        self.timestamps = []
+
+    def monitor_get(self):
+        """ 
+        Returns the statistics for the current :attr:`values` list as
+        dictionary
+
+        Returns
+        -------
+        ret : dict
+            A dictionary with the keys : mean, std, num, err. If no monitor
+            events have been stored, these will simply be np.nan values 
+        """
+        a=np.array(self.values[1:])
+        ret = {}
+        if (len(a)==0):
+            ret["mean"]=ret["std"]=ret["err"]=np.nan
+            ret["num"]=0
+            if DEBUG != 0:
+                logprint("No pulses.... while monitoring %s" % self.name)
+            return ret
+        
+        ret["mean"]=a.mean()
+        ret["std"] =a.std()
+        ret["num"] =len(a)
+        ret["err"] =ret["std"]/np.sqrt(ret["num"])
+        if DEBUG != 0:
+            logprint("get monitoring for %s" % self.name)
+        return ret
+
+
+    def __getattr__(self, name):
+        """
+        Redefined to look in self.data for a keyword
+        """
+        if self.data.has_key(name):
+            return self.data[name]
+        else:
+            return self.__dict__[name]
+
+
+
+#########################
+# Stand alone routines! #
+#########################
 
 def add_pv_to_cache(pvname):
-  if not pvname in pv_cache.keys():
-    pv_cache[pvname] = Pv(pvname)
-  return pv_cache[pvname]
+    """
+    Add a PV to the save cache of PV objects
+    
+    If a PV with that name is already in the cache, it will not be added twice.
+    
+    Parameters
+    ----------
+    pvname : str
+        The name of the desired PV
+
+    Returns
+    -------
+    PV : object
+        A PV object         
+    """
+    if not pvname in pv_cache.keys():
+        pv_cache[pvname] = Pv(pvname)
+    return pv_cache[pvname]
+
 
 def monitor_start(pvname, monitor_append=False):
-  """ start monitoring for pvname, pvname is added to the cache list """
-  add_pv_to_cache(pvname)
-  pv_cache[pvname].monitor_start(monitor_append)
+    """ 
+    Start monitoring a PV.
+    
+    Parameters
+    ----------
+    pvname : str
+        The name of the desired PV
+
+    monitor_append : bool , optional
+        The choice of storing all updated values in a list, or simply
+        overwriting the value attribute each time. This will change the
+        :attr:`.monitor_append` attribute
+    
+    See Also
+    --------
+    :method:`.Pv.monitor_start`
+    """
+    add_pv_to_cache(pvname)
+    pv_cache[pvname].monitor_start(monitor_append)
   
+
 def monitor_stop(pvname):
-  """ stop monitoring for pvname, pvname is added to the cache list """
-  add_pv_to_cache(pvname)
-  pv_cache[pvname].monitor_stop()
-  
+    """ 
+    Stop monitoring a PV
+    
+    Parameters
+    ----------
+    pvname : str
+        The name of the desired PV
+    
+    See Also
+    --------
+    :method:`.Pv.monitor_stop`
+    """
+    add_pv_to_cache(pvname)
+    pv_cache[pvname].monitor_stop()
+ 
+
 def monitor_clear(pvname):
-  """ clear the `values` list for pvname, pvname is added to the cache list """
-  add_pv_to_cache(pvname)
-  pv_cache[pvname].monitor_clear()
+    """ 
+    Clear the :attr:`.Pv.values` list
+    
+    Parameters
+    ----------
+    pvname : str
+        the name of the desired pv
+    
+    See Also
+    --------
+    :method:`.Pv.monitor_clear`
+    """
+    add_pv_to_cache(pvname)
+    pv_cache[pvname].monitor_clear()
+
 
 def monitor_get(pvname):
-  """ returns statistics for pvname, pvname is added to the cache list """
-  add_pv_to_cache(pvname)
-  return pv_cache[pvname].monitor_get()
+    """
+    Returns the statistics for the current :attr:`values` list as
+    dictionary
+    
+    Parameters
+    ----------
+    pvname : str
+        the name of the desired pv
+
+    Returns
+    -------
+    ret : dict
+        A dictionary with the keys : mean, std, num, err. If no monitor
+        events have been stored, these will simply be np.nan values 
+    
+    See Also
+    --------
+    :method:`.Pv.monitor_get`
+    """
+    add_pv_to_cache(pvname)
+    return pv_cache[pvname].monitor_get()
+
 
 def monitor_stop_all(clear=False):
-  """ stop monitoring for all PVs defined in cache list """
-  for pv in pv_cache.keys():
-    pv_cache[pv].monitor_stop()
-    if (clear):
-      pv_cache[pv].monitor_clear()
-    logprint("stopping monitoring for %s" % pv)
+    """
+    Stop monitoring for all PVs defined in cache list 
+    
+    Parameters
+    ----------
+    clear : bool, optional
+        Choice to also clear all saved values
+
+    See Also
+    --------
+    :func:`.monitor_stop`, :method:`.Pv.monitor_clear`
+
+    """
+    for pv in pv_cache.keys():
+        pv_cache[pv].monitor_stop()
+        if clear:
+            pv_cache[pv].monitor_clear()
+        logprint("stopping monitoring for %s" % pv)
+
 
 def get(pvname,as_string=False):
-  """ returns current value for the pvname, if as_string is True values
-      are converted to string """
-  add_pv_to_cache(pvname)
-  return pv_cache[pvname].get(as_string=as_string, timeout=DEFAULT_TIMEOUT)
+    """ 
+    Return the current value for a PV
+    
+    Parameters
+    ----------
+    pvname : str
+        the name of the desired pv
+    
+    as_string : bool , optional
+        Return the value as a string type. For Enum PVs, the default
+        behavior is to return the integer representing the current value.
+        However, if as_string is set to True, this will return the
+        associated string for the Enum
+   
+    Returns
+    -------
+    value : float, int, str
+        Current value of the PV
+
+    See Also
+    --------
+    :method:`.Pv.get`
+    """
+    add_pv_to_cache(pvname)
+    return pv_cache[pvname].get(as_string=as_string, timeout=DEFAULT_TIMEOUT)
+
 
 def put(pvname,value):
-  """ write value to pvname; returns the value itself """
-  add_pv_to_cache(pvname)
-  return pv_cache[pvname].put(value, timeout=DEFAULT_TIMEOUT)
+    """ 
+    Write value to a PV
+    
+    Parameters
+    ----------
+    pvname : str
+        the name of the desired pv
+    
+    value : float, int, str or array
+        Desired PV value
+    
+    Returns
+    -------
+    value : float, int, str, or array
+        The value given to the PV
+    
+    See Also
+    --------
+    :method:`.Pv.put`
+    """
+    add_pv_to_cache(pvname)
+    return pv_cache[pvname].put(value, timeout=DEFAULT_TIMEOUT)
+
 
 def wait_until_change(pvname,timeout=60):
-  """ wait until value of pvname changes (default timeout is 60 sec) """
-  pv = add_pv_to_cache(pvname)
-  ismon = pv.ismonitored
-  if not ismon:
-    pv.monitor_start(False)
-  changed = pv.wait_until_change(timeout=timeout)
-  if not ismon:
-    monitor_stop(pvname)
-  return changed
+    """
+    Wait until the PV value changes
+    
+    Parameters
+    ----------
+    pvname : str
+        the name of the desired pv
+    
+    timeout : float, optional
+        Maximum time to wait for PV value to change
+
+    Returns
+    -------
+    result : bool
+        Whether or not the wait has stopped due to a timeout (False) or
+        because the PV value has changed
+    
+    See Also
+    --------
+    :method:`.Pv.wait_until_change`
+    """
+    pv = add_pv_to_cache(pvname)
+    ismon = pv.ismonitored
+    if not ismon:
+        pv.monitor_start(False)
+    changed = pv.wait_until_change(timeout=timeout)
+    if not ismon:
+        monitor_stop(pvname)
+    return changed
+
 
 def wait_for_value(pvname,value,timeout=60):
-  """ wait until pvname is exactly value (default timeout is 60 sec) """
-  pv = add_pv_to_cache(pvname)
-  ismon = pv.ismonitored
-  if not ismon:
-    pv.monitor_start(False)
-  is_value = pv.wait_for_value(value,timeout=timeout)
-  if not ismon:
-    monitor_stop(pvname)
-  return is_value
+    """
+    Wait for a PV to reach a specific value
+    
+    Parameters
+    ----------
+    pvname : str
+        the name of the desired pv
+    
+    value : float, int, string
+        The desired value to wait for the PV to reach
+
+    timeout : float, optional
+        Maximum time to wait for PV value to reach value
+
+    Returns
+    -------
+    result : bool
+        Whether or not the wait has stopped due to a timeout (False) or
+        because the PV value has reached the value
+    
+    See Also
+    --------
+    :method:`.Pv.wait_for_value`
+    """
+    pv = add_pv_to_cache(pvname)
+    ismon = pv.ismonitored
+    if not ismon:
+        pv.monitor_start(False)
+    is_value = pv.wait_for_value(value,timeout=timeout)
+    if not ismon:
+        monitor_stop(pvname)
+    return is_value
+
 
 def wait_for_range(pvname,low,high,timeout=60):
-  """ wait until pvname is exactly between low and high (default timeout is 60 sec) """
-  pv = add_pv_to_cache(pvname)
-  ismon = pv.ismonitored
-  if not ismon:
-    pv.monitor_start(False)
-  in_range = pv.wait_for_range(low, high, timeout=timeout)
-  if not ismon:
-    monitor_stop(pvname)
-  return in_range
+    """
+    Wait for a PV to enter a specific range
+    
+    Parameters
+    ----------
+    low : float, int
+        The lower bound of the desired range
+
+    high : float, int
+        The upper bound of the desired range
+
+    timeout : float, optional
+        Maximum time to wait for PV value to reach value
+
+    Returns
+    -------
+    result : bool
+        Whether or not the wait has stopped due to a timeout (False) or
+        because the PV value has reached the value
+    
+    See Also
+    --------
+    :method:`.Pv.wait_for_value`
+    """
+    pv = add_pv_to_cache(pvname)
+    ismon = pv.ismonitored
+    if not ismon:
+        pv.monitor_start(False)
+    in_range = pv.wait_for_range(low, high, timeout=timeout)
+    if not ismon:
+        monitor_stop(pvname)
+    return in_range
+
 
 def clear():
-  """ stop monitoring and disconnect PV, to use as kind of reset """
-  for pv in pv_cache:
-    monitor_stop(pv)
-    monitor_clear(pv)
-    pv_cache[pv].disconnect()
-  pv_cache.clear()
+    """ 
+    Stop monitoring and disconnect all PVs
+    """
+    for pv in pv_cache:
+        monitor_stop(pv)
+        monitor_clear(pv)
+        pv_cache[pv].disconnect()
+    pv_cache.clear()
+
 
 def what_is_monitored():
-  """ print list of PVs that are currently monitored """
-  for pv in pv_cache:
-    if (pv_cache[pv].ismonitored):
-      logprint("pv %s is currently monitored" % pv_cache[pv].name)
+    """ 
+    Print a list of PVs that are currently monitored
+    """
+    for pv in pv_cache:
+        if (pv_cache[pv].ismonitored):
+            logprint("pv %s is currently monitored" % pv_cache[pv].name)
+
