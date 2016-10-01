@@ -8,8 +8,8 @@ PSP Interface for EPICS Channel Access
 
 PSP is a convienent wrapper for accessing Channel Access information in Python.
 
-Index
------
+Table of Contents
+-----------------
 .. toctree::
    :maxdepth: 1
    

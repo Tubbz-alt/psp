@@ -57,7 +57,7 @@ a perfect way to monitor an EPICS channel, but for large arrays and images, it
 is prudent to not monitor for too long as it easy to put a large burden on
 system memory.   
 
-User-defined Callbacks
+User-Defined Callbacks
 ^^^^^^^^^^^^^^^^^^^^^^
 Sometimes just keeping track of the PV value isn't enough, instead an action
 should be performed whenever the PV updates or connects. Callbacks allow a

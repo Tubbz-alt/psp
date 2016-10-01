@@ -1,18 +1,14 @@
 Release Notes
 =============
-
 v2.2.0
 ------
-
 Enhancements
 ^^^^^^^^^^^^
-
-* Create Documentation
+* Documentation!!
 * Better support for threading
-
+* ``as_string`` now intelligently handles ENUM types
 
 API Changes
 ^^^^^^^^^^^
-
-* Create a utils sub-module that contains the TimeoutSem, all the functionality
+* Created a utils sub-module that contains the TimeoutSem, all the functionality
   to flexibly apply logic to arrays, as well as the now function
