@@ -35,7 +35,9 @@ class Pv(pyca.capv):
     
     Many of the parameters can be modified on a per get/put call basis,
     however, the default behaviour will be determined by the state variables of
-    the class.
+    the class. While information can be requested via the method
+    :meth:`.Pv.get`, there are places where both the value of the PV and
+    infromation on the metadata persist. 
 
     Parameters
     ----------
@@ -52,7 +54,7 @@ class Pv(pyca.capv):
     monitor : callable or bool, optional
         The choice to begin monitoring the PV upon initialization. A callable
         can also be passed and will automatically be added as a monitor callback
-        using the method :method:`.add_monitor_callback`
+        using the method :meth:`.add_monitor_callback`
 
     count : int, optional
         If the PV interfaces with a waveform record, a smaller subsection of
@@ -63,6 +65,42 @@ class Pv(pyca.capv):
         If set to True and the PV is a waveform record, the return of get / put
         will be a NumPy type. By default, the PV will use the current pyca setting
         that can be modifed by using :func:`utils.set_numpy`
+    
+    
+    Attributes
+    ----------
+    isinitialized : bool
+        Current initialization state
+
+    isconnected : bool
+        Current connection state
+
+    ismonitored : bool
+        Current monitor state
+
+    data : dict
+        A dictionary containing all the metadata from the channel. The contents
+        of this dictionary will vary depending on the PV and :attr:`.Pv.control`
+        setting
+    
+    value : float, string, int, array
+        Last value seen through the channel.
+
+    monitor_append : bool
+        When the PV is being monitored the :attr:`.Pv.Value` is automatically
+        updated. In addition, if this flag is set to True, when the PV channel
+        sees a monitor event the value will be appended to the
+        :attr:`.Pv.values`. This is useful if you want to catch all the value
+        updates but you don't want to constantly poll the value of the PV. 
+    
+    values : list
+        If the PV is being monitored with monitor_append set, updates to the PV
+        value will be saved to this list. 
+    
+    timestamps : list
+        If the PV object is in a mode where timestamps are included in the
+        channel monitor, the timestamp of each monitor append will be saved to
+        this list
     """
     def __init__(self, name, initialize=False, count=None,
                  control=False, monitor=False, use_numpy=None,
@@ -210,7 +248,7 @@ class Pv(pyca.capv):
 
         See Also
         --------
-        :method:`.add_monitor_callback`
+        :meth:`.add_monitor_callback`
         """
         id = self.cbid
         self.cbid += 1
@@ -254,7 +292,7 @@ class Pv(pyca.capv):
 
         See Also
         --------
-        :method:`.add_connection_callback`
+        :meth:`.add_connection_callback`
         """ 
         id = self.cbid
         self.cbid += 1
@@ -344,7 +382,7 @@ class Pv(pyca.capv):
         """
         Subscribe to monitor events from the PV channel
         
-        Much of the functionality of this method is wrapped in higher level
+        Much of the functionality of this meth is wrapped in higher level
         utilities
 
         Parameters
@@ -365,7 +403,7 @@ class Pv(pyca.capv):
         
         See Also
         --------
-        :method:`.monitor_start`, :method:`.monitor_stop`
+        :meth:`.monitor_start`, :meth:`.monitor_stop`
         """
         if not self.isconnected:
             self.connect(DEFAULT_TIMEOUT)
@@ -401,11 +439,11 @@ class Pv(pyca.capv):
         Close Channel Access Subscription
         
         This is the lower level implementation. It is best to use
-        :method:`monitor_stop instead.
+        :meth:`monitor_stop` instead.
         
         See Also
         --------
-        :method:`.monitor_stop`
+        :meth:`.monitor_stop`
         """
         self.unsubscribe_channel()
         self.ismonitored = False
@@ -416,7 +454,7 @@ class Pv(pyca.capv):
         Get and return the value of the PV
         
         If the PV has not been previously connected, this will automatically
-        attempt to use :method:`.connect`. If you are expecting a waveform PV
+        attempt to use :meth:`.connect`. If you are expecting a waveform PV
         and want to choose to use a numpy array or not, set the attribute
         :attr:`.use_numpy`.
         
@@ -498,7 +536,7 @@ class Pv(pyca.capv):
         Set the PV value
         
         If the PV has not been previously connected, this will automatically
-        attempt to use :method:`.connect`.
+        attempt to use :meth:`.connect`.
 
         Parameters
         ----------
@@ -884,7 +922,7 @@ def monitor_start(pvname, monitor_append=False):
     
     See Also
     --------
-    :method:`.Pv.monitor_start`
+    :meth:`.Pv.monitor_start`
     """
     add_pv_to_cache(pvname)
     pv_cache[pvname].monitor_start(monitor_append)
@@ -901,7 +939,7 @@ def monitor_stop(pvname):
     
     See Also
     --------
-    :method:`.Pv.monitor_stop`
+    :meth:`.Pv.monitor_stop`
     """
     add_pv_to_cache(pvname)
     pv_cache[pvname].monitor_stop()
@@ -918,7 +956,7 @@ def monitor_clear(pvname):
     
     See Also
     --------
-    :method:`.Pv.monitor_clear`
+    :meth:`.Pv.monitor_clear`
     """
     add_pv_to_cache(pvname)
     pv_cache[pvname].monitor_clear()
@@ -942,7 +980,7 @@ def monitor_get(pvname):
     
     See Also
     --------
-    :method:`.Pv.monitor_get`
+    :meth:`.Pv.monitor_get`
     """
     add_pv_to_cache(pvname)
     return pv_cache[pvname].monitor_get()
@@ -959,7 +997,7 @@ def monitor_stop_all(clear=False):
 
     See Also
     --------
-    :func:`.monitor_stop`, :method:`.Pv.monitor_clear`
+    :func:`.monitor_stop`, :meth:`.Pv.monitor_clear`
 
     """
     for pv in pv_cache.keys():
@@ -991,7 +1029,7 @@ def get(pvname,as_string=False):
 
     See Also
     --------
-    :method:`.Pv.get`
+    :meth:`.Pv.get`
     """
     add_pv_to_cache(pvname)
     return pv_cache[pvname].get(as_string=as_string, timeout=DEFAULT_TIMEOUT)
@@ -1016,7 +1054,7 @@ def put(pvname,value):
     
     See Also
     --------
-    :method:`.Pv.put`
+    :meth:`.Pv.put`
     """
     add_pv_to_cache(pvname)
     return pv_cache[pvname].put(value, timeout=DEFAULT_TIMEOUT)
@@ -1042,7 +1080,7 @@ def wait_until_change(pvname,timeout=60):
     
     See Also
     --------
-    :method:`.Pv.wait_until_change`
+    :meth:`.Pv.wait_until_change`
     """
     pv = add_pv_to_cache(pvname)
     ismon = pv.ismonitored
@@ -1077,7 +1115,7 @@ def wait_for_value(pvname,value,timeout=60):
     
     See Also
     --------
-    :method:`.Pv.wait_for_value`
+    :meth:`.Pv.wait_for_value`
     """
     pv = add_pv_to_cache(pvname)
     ismon = pv.ismonitored
@@ -1112,7 +1150,7 @@ def wait_for_range(pvname,low,high,timeout=60):
     
     See Also
     --------
-    :method:`.Pv.wait_for_value`
+    :meth:`.Pv.wait_for_value`
     """
     pv = add_pv_to_cache(pvname)
     ismon = pv.ismonitored
