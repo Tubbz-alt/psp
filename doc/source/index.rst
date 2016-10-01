@@ -15,7 +15,7 @@ Index
    
    toplevel.rst
    pv.rst
-   release.rst
    advanced.rst
+   release.rst
 
 
