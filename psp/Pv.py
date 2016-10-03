@@ -34,10 +34,10 @@ class Pv(pyca.capv):
     The base class to represent a Channel Access PV
     
     Many of the parameters can be modified on a per get/put call basis,
-    however, the default behaviour will be determined by the state variables of
+    however, the default behavior will be determined by the state variables of
     the class. While information can be requested via the method
     :meth:`.Pv.get`, there are places where both the value of the PV and
-    infromation on the metadata persist. 
+    information on the metadata persist. 
 
     Parameters
     ----------
@@ -64,7 +64,7 @@ class Pv(pyca.capv):
     use_numpy : bool, optional
         If set to True and the PV is a waveform record, the return of get / put
         will be a NumPy type. By default, the PV will use the current pyca setting
-        that can be modifed by using :func:`utils.set_numpy`
+        that can be modified by using :func:`utils.set_numpy`
     
     
     Attributes
@@ -584,8 +584,8 @@ class Pv(pyca.capv):
         Return the ENUM types associated with the PV
 
         Since this information usually only changes when an IOC is remade, it is
-        only neccesary to get this information once. After the first call, the
-        tuple is store in the dictionary :attr:`data` and accesible via the
+        only necessary to get this information once. After the first call, the
+        tuple is store in the dictionary :attr:`data` and accessible via the
         property :attr:`enum_set`
 
         Parameters
@@ -640,7 +640,7 @@ class Pv(pyca.capv):
 
     def wait_condition(self, condition, timeout=60, check_first=True):
         """
-        Wait for an arbitray condition to be True
+        Wait for an arbitrary condition to be True
 
         Parameters
         ----------
@@ -654,7 +654,7 @@ class Pv(pyca.capv):
             Whether to check if the condition currently evaluates to True
             first.  Since the wait condition is only retried from a monitor
             callback, the condition will only be rechecked when the PV receives
-            a monitor event. This means that if you don't immediatelly check
+            a monitor event. This means that if you don't immediately check
             the wait condition and then the PV never receives a monitor event
             the condition will never be tested
         
@@ -762,7 +762,7 @@ class Pv(pyca.capv):
   
     def _ensure_monitored(self):
         """
-        Make sure PV has been intialized and monitored
+        Make sure PV has been initialized and monitored
         """
         self.get()
         if not self.ismonitored:
