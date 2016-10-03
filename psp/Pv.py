@@ -80,17 +80,17 @@ class Pv(pyca.capv):
 
     data : dict
         A dictionary containing all the metadata from the channel. The contents
-        of this dictionary will vary depending on the PV and :attr:`.Pv.control`
+        of this dictionary will vary depending on the PV and :attr:`.PV.control`
         setting
     
     value : float, string, int, array
         Last value seen through the channel.
 
     monitor_append : bool
-        When the PV is being monitored the :attr:`.Pv.Value` is automatically
+        When the PV is being monitored the :attr:`.PV.Value` is automatically
         updated. In addition, if this flag is set to True, when the PV channel
         sees a monitor event the value will be appended to the
-        :attr:`.Pv.values`. This is useful if you want to catch all the value
+        :attr:`.PV.values`. This is useful if you want to catch all the value
         updates but you don't want to constantly poll the value of the PV. 
     
     values : list
@@ -922,7 +922,7 @@ def monitor_start(pvname, monitor_append=False):
     
     See Also
     --------
-    :meth:`.Pv.monitor_start`
+    :meth:`.PV.monitor_start`
     """
     add_pv_to_cache(pvname)
     pv_cache[pvname].monitor_start(monitor_append)
@@ -939,7 +939,7 @@ def monitor_stop(pvname):
     
     See Also
     --------
-    :meth:`.Pv.monitor_stop`
+    :meth:`.PV.monitor_stop`
     """
     add_pv_to_cache(pvname)
     pv_cache[pvname].monitor_stop()
@@ -947,7 +947,7 @@ def monitor_stop(pvname):
 
 def monitor_clear(pvname):
     """ 
-    Clear the :attr:`.Pv.values` list
+    Clear the :attr:`.PV.values` list
     
     Parameters
     ----------
@@ -956,7 +956,7 @@ def monitor_clear(pvname):
     
     See Also
     --------
-    :meth:`.Pv.monitor_clear`
+    :meth:`.PV.monitor_clear`
     """
     add_pv_to_cache(pvname)
     pv_cache[pvname].monitor_clear()
@@ -980,7 +980,7 @@ def monitor_get(pvname):
     
     See Also
     --------
-    :meth:`.Pv.monitor_get`
+    :meth:`.PV.monitor_get`
     """
     add_pv_to_cache(pvname)
     return pv_cache[pvname].monitor_get()
@@ -997,7 +997,7 @@ def monitor_stop_all(clear=False):
 
     See Also
     --------
-    :func:`.monitor_stop`, :meth:`.Pv.monitor_clear`
+    :func:`.monitor_stop`, :meth:`.PV.monitor_clear`
 
     """
     for pv in pv_cache.keys():
@@ -1029,7 +1029,7 @@ def get(pvname,as_string=False):
 
     See Also
     --------
-    :meth:`.Pv.get`
+    :meth:`.PV.get`
     """
     add_pv_to_cache(pvname)
     return pv_cache[pvname].get(as_string=as_string, timeout=DEFAULT_TIMEOUT)
@@ -1054,7 +1054,7 @@ def put(pvname,value):
     
     See Also
     --------
-    :meth:`.Pv.put`
+    :meth:`.PV.put`
     """
     add_pv_to_cache(pvname)
     return pv_cache[pvname].put(value, timeout=DEFAULT_TIMEOUT)
@@ -1080,7 +1080,7 @@ def wait_until_change(pvname,timeout=60):
     
     See Also
     --------
-    :meth:`.Pv.wait_until_change`
+    :meth:`.PV.wait_until_change`
     """
     pv = add_pv_to_cache(pvname)
     ismon = pv.ismonitored
@@ -1115,7 +1115,7 @@ def wait_for_value(pvname,value,timeout=60):
     
     See Also
     --------
-    :meth:`.Pv.wait_for_value`
+    :meth:`.PV.wait_for_value`
     """
     pv = add_pv_to_cache(pvname)
     ismon = pv.ismonitored
@@ -1150,7 +1150,7 @@ def wait_for_range(pvname,low,high,timeout=60):
     
     See Also
     --------
-    :meth:`.Pv.wait_for_value`
+    :meth:`.PV.wait_for_value`
     """
     pv = add_pv_to_cache(pvname)
     ismon = pv.ismonitored

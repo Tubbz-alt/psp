@@ -2,7 +2,7 @@ Top Level Methods
 *****************
 The **PSP** package contains a number of methods for abstracting the chore of
 object creation away from the user. While all of these functions are available
-as class methods of the :class:`.Pv.Pv` object, quickly accessing one or two
+as class methods of the :class:`.psp.PV` object, quickly accessing one or two
 methods can be desirable in simpler programs.
 
 The PV Cache

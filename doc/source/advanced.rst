@@ -21,9 +21,9 @@ looks at a PV and checks one second later if the value changed
 .. code-block:: python
     
     import time
-    from psp.Pv import Pv
+    from psp import PV
 
-    mon_pv = Pv(<pvname>,monitor=True)
+    mon_pv = PV(<pvname>,monitor=True)
     
     initial = mon_pv.value
     time.sleep(5.0)
@@ -33,17 +33,17 @@ looks at a PV and checks one second later if the value changed
 
 Sometimes checking the current value of the PV isn't enough, instead the
 history of the PV needs to be tracked. Each PV object has a
-:attr:`.Pv.monitor_append` attribute that determines how this data is stored.
+:attr:`.PV.monitor_append` attribute that determines how this data is stored.
 In the default mode, as shown above, the ``value`` is overwritten and the class
 moves on, but in the appending mode, each update is stored in the
-:attr:`.Pv.values`. This allows the user to quickly keep track of rapidly moving PV.
+:attr:`.PV.values`. This allows the user to quickly keep track of rapidly moving PV.
 
 .. code-block:: python
     
     import time
-    from psp.Pv import Pv
+    from psp import PV
 
-    mon_pv = Pv(<pvname>)
+    mon_pv = PV(<pvname>)
     mon_pv.monitor_start(monitor_append=True)
 
     time.sleep(5.0) #Wait for changes
@@ -52,7 +52,7 @@ moves on, but in the appending mode, each update is stored in the
         print 'This PV has updated %s times' % len(mon_pv.values)
 
 The class even has some built-in functionality to return some basic statistics
-of the class with the :meth:`.Pv.monitor_get`. For most scalar values, this is
+of the class with the :meth:`.PV.monitor_get`. For most scalar values, this is
 a perfect way to monitor an EPICS channel, but for large arrays and images, it
 is prudent to not monitor for too long as it easy to put a large burden on
 system memory.   
@@ -62,8 +62,8 @@ User-Defined Callbacks
 Sometimes just keeping track of the PV value isn't enough, instead an action
 should be performed whenever the PV updates or connects. Callbacks allow a
 simple way to handle this all behind the scenes for you. The callback function
-should accept one argument, see the :meth:`.Pv.add_connection_callback` or
-:meth:`.Pv.add_monitor_callback` methods for more information about what this
+should accept one argument, see the :meth:`.PV.add_connection_callback` or
+:meth:`.PV.add_monitor_callback` methods for more information about what this
 arguement indicates. A quick example of this feature can be seen below:
 
 .. code-block:: python
@@ -71,9 +71,9 @@ arguement indicates. A quick example of this feature can be seen below:
     def updated(e):
         print 'The PV has updated`
 
-    from psp.Pv import Pv
+    from psp import PV
 
-    mon_pv = Pv(<pvname>)
+    mon_pv = PV(<pvname>)
     cb_id  = mon_pv.add_monitor_callback(updated) #The function returns an id
                                                   #for the callback
 
