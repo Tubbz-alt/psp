@@ -14,8 +14,8 @@ pairings. The benefit is that this allows multiple modules to use the same PV
 object and associated channel without having to write any additional code. All
 of the functions in these top level methods will first look in the cache for an
 existing object with that PV name, before creating a new object. Keep in mind
-this may not always be the optimal behaviour. For instance in the
-camviewer application, which connects to image PVs twice, once with a small
+this may not always be the optimal behavior. For instance in the
+Camviewer application, which connects to image PVs twice, once with a small
 ``count`` setting to monitor a smaller subsection of the image for changes, and a
 second time, without monitoring, to retrieve the whole image when needed.   
 

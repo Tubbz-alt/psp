@@ -14,7 +14,7 @@ by a ``get`` call. While refreshing the channel information this way once or
 twice in a script is fine, repeated calls can be cumbersome. This is where
 monitor comes in. While the PV is actively being monitored, the value attribute
 will be actively updated by an internal callback function. This mode of
-operation can either be specified at the time of object initialziation or later
+operation can either be specified at the time of object initialization or later
 by calling :meth:`monitor_start`. For example, here is a quick script that
 looks at a PV and checks one second later if the value changed 
 
