@@ -5,7 +5,7 @@ Access metadata
 
 Accessing Information
 ^^^^^^^^^^^^^^^^^^^^^
-The PV object stores all of the gathered information in the :attr:`.PV.data`
+The PV object stores all of the gathered information in the :attr:`.Pv.data`
 dictionary. Once collected this information can be quickly accessed by just
 using the desired keyword like you would a class property
 
@@ -39,8 +39,8 @@ including:
 
 A note on ``control``
 ^^^^^^^^^^^^^^^^^^^^^
-What metadata is looked at during a :meth:`.PV.get` call depends on the
-:attr:`.PV.control` setting of the PV. This flag can either be set globally for all
+What metadata is looked at during a :meth:`.Pv.get` call depends on the
+:attr:`.Pv.control` setting of the PV. This flag can either be set globally for all
 calls the PV makes, or be modified in indiviudal functions where the keyword is
 available. When set to ``True``, the PV will look at the limit information, the
 unit of measurement, **but**, will not get the metadata associated with the
@@ -55,11 +55,11 @@ Getting all of a PVs metadata takes two seperate `get` calls, one to each
 structure that stores this information.
 
 The recommended way to deal with this caveat is to generally request Channel
-Access infromation with :attr:`.PV.control` set to ``False``. This way the
+Access infromation with :attr:`.Pv.control` set to ``False``. This way the
 timestamp infromation is retrieved along with the PV. Then, if the user wants
-to see things like the EGU field, one call using :meth:`.PV.get` with
+to see things like the EGU field, one call using :meth:`.Pv.get` with
 ``control`` set to ``True`` will store the desired information in the
-:attr:`.PV.data` dictionary. Since this kind of metadata rarely changes, this
+:attr:`.Pv.data` dictionary. Since this kind of metadata rarely changes, this
 single call is usually enough for most applications. Here is an example:
 
 .. code-block:: python
@@ -79,5 +79,5 @@ single call is usually enough for most applications. Here is an example:
 
 The ``PV`` API
 ^^^^^^^^^^^^^^
-.. autoclass:: psp.PV
+.. autoclass:: psp.Pv.Pv
    :members:

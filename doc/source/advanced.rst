@@ -7,7 +7,7 @@ higher level functions to support a number of use cases.
 Monitoring
 ^^^^^^^^^^
 Often times the user may want to keep track of how a PV's value changes over
-time. The :class:`.PV` has a few internal methods that make this easy. Once the
+time. The :class:`.Pv` has a few internal methods that make this easy. Once the
 PV is initialized, the most recent value can be quickly accessed from the
 :attr:`.Pv.value`. Now if the object is unmonitored, this will only be updated
 by a ``get`` call. While refreshing the channel information this way once or
@@ -33,10 +33,10 @@ looks at a PV and checks one second later if the value changed
 
 Sometimes checking the current value of the PV isn't enough, instead the
 history of the PV needs to be tracked. Each PV object has a
-:attr:`.PV.monitor_append` attribute that determines how this data is stored.
+:attr:`.Pv.monitor_append` attribute that determines how this data is stored.
 In the default mode, as shown above, the ``value`` is overwritten and the class
 moves on, but in the appending mode, each update is stored in the
-:attr:`.PV.values`. This allows the user to quickly keep track of rapidly moving PV.
+:attr:`.Pv.values`. This allows the user to quickly keep track of rapidly moving PV.
 
 .. code-block:: python
     
@@ -52,7 +52,7 @@ moves on, but in the appending mode, each update is stored in the
         print 'This PV has updated %s times' % len(mon_pv.values)
 
 The class even has some built-in functionality to return some basic statistics
-of the class with the :meth:`.PV.monitor_get`. For most scalar values, this is
+of the class with the :meth:`.Pv.monitor_get`. For most scalar values, this is
 a perfect way to monitor an EPICS channel, but for large arrays and images, it
 is prudent to not monitor for too long as it easy to put a large burden on
 system memory.   
@@ -62,8 +62,8 @@ User-Defined Callbacks
 Sometimes just keeping track of the PV value isn't enough, instead an action
 should be performed whenever the PV updates or connects. Callbacks allow a
 simple way to handle this all behind the scenes for you. The callback function
-should accept one argument, see the :meth:`.PV.add_connection_callback` or
-:meth:`.PV.add_monitor_callback` methods for more information about what this
+should accept one argument, see the :meth:`.Pv.add_connection_callback` or
+:meth:`.Pv.add_monitor_callback` methods for more information about what this
 arguement indicates. A quick example of this feature can be seen below:
 
 .. code-block:: python
