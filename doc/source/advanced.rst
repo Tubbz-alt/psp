@@ -24,7 +24,6 @@ looks at a PV and checks one second later if the value changed
     from psp import PV
 
     mon_pv = PV(<pvname>,monitor=True)
-    
     initial = mon_pv.value
     time.sleep(5.0)
 
@@ -77,6 +76,8 @@ arguement indicates. A quick example of this feature can be seen below:
     cb_id  = mon_pv.add_monitor_callback(updated) #The function returns an id
                                                   #for the callback
 
+    >>> mon_pv.monitor_start()    
+    
     >>> mon_pv.put(5)
     'The PV has updated'
     >>> mon_pv.del_monitor_callback(cb_id) #Remove the callback
