@@ -518,8 +518,8 @@ class Pv(pyca.capv):
             logprint("got %s\n" % self.value.__str__())
         
         if as_string:
-            if p.type() == 'DBF_ENUM':
-                enums = p.get_enum_set(timeout=tmo)
+            if self.type() == 'DBF_ENUM':
+                enums = self.get_enum_set(timeout=tmo)
                 if len(enums) > self.value >= 0:
                     return enums[self.value]
                 else:
