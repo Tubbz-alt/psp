@@ -168,7 +168,9 @@ class Pv(pyca.capv):
         
         if isconnected:
             self.__con_sem.set()
-        
+        else:
+            self.__con_sem.clear()
+
         if self.do_initialize:
             self.get_data(self.control, -1.0, self.count)
             pyca.flush_io()
@@ -178,8 +180,6 @@ class Pv(pyca.capv):
                 self.count = super(Pv, self).count()
             except:
                 pass
-        else:
-            self.__con_sem.clear()
         
         for (id, cb) in self.con_cbs.items():
             try:
@@ -373,7 +373,8 @@ class Pv(pyca.capv):
         except pyca.pyexc:
             logprint('Channel for PV {:} is already '\
                      'disconnected'.format(self.name)) 
-        
+
+        self.__con_sem.clear()
         self.isconnected = False
   
 
